@@ -1,0 +1,66 @@
+@import url('https://fonts.googleapis.com/css2?family=Public+Sans:ital,wght@0,400;0,500;0,600;0,700;0,800;1,400&display=swap');
+@import "tailwindcss";
+
+@theme {
+  --font-sans: "Public Sans", ui-sans-serif, system-ui, sans-serif;
+
+  /* Core palette — see design plan: ink/paper surfaces, one signal accent */
+  --color-ink-950: #0d0f14;
+  --color-ink-900: #14171f;
+  --color-ink-800: #1c2029;
+  --color-ink-700: #262b37;
+  --color-ink-600: #3a4152;
+  --color-ink-500: #5b6478;
+  --color-ink-400: #838ca0;
+  --color-ink-300: #aeb5c4;
+  --color-ink-200: #d3d7e0;
+  --color-ink-100: #e8eaef;
+  --color-ink-50: #f4f5f7;
+
+  --color-paper: #fafaf8;
+  --color-paper-dim: #f1f1ed;
+
+  --color-signal-700: #0b5c53;
+  --color-signal-600: #0f7a6e;
+  --color-signal-500: #14907f;
+  --color-signal-400: #3dab99;
+  --color-signal-100: #dcf1ec;
+  --color-signal-50: #eef8f5;
+
+  --color-amber-600: #9a6a1a;
+  --color-amber-500: #b7791f;
+  --color-amber-100: #f7ecd8;
+
+  --color-rose-600: #a3403b;
+  --color-rose-500: #bd514c;
+  --color-rose-100: #f7e2e0;
+}
+
+html {
+  color-scheme: light;
+}
+
+body {
+  background: var(--color-paper);
+  color: var(--color-ink-900);
+  font-feature-settings: "tnum" 1, "ss01" 1;
+}
+
+/* Token numerals get slightly wider tracking + tabular figures for legibility at a glance */
+.token-display {
+  font-variant-numeric: tabular-nums;
+  letter-spacing: -0.01em;
+}
+
+:focus-visible {
+  outline: 2px solid var(--color-signal-600);
+  outline-offset: 2px;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  *, *::before, *::after {
+    animation-duration: 0.001ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.001ms !important;
+  }
+}
