@@ -5,15 +5,15 @@ from app.core.config import settings
 
 from sqlalchemy.pool import StaticPool
 
-if settings.DATABASE_URL.startswith("sqlite"):
+if settings.sync_database_url.startswith("sqlite"):
     engine = create_engine(
-        settings.DATABASE_URL,
+        settings.sync_database_url,
         connect_args={"check_same_thread": False},
         poolclass=StaticPool,
     )
 else:
     engine = create_engine(
-        settings.DATABASE_URL,
+        settings.sync_database_url,
         pool_pre_ping=True,
         pool_size=10,
         max_overflow=20,
