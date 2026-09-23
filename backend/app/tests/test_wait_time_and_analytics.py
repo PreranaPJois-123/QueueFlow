@@ -66,7 +66,9 @@ def test_analytics_empty_state_has_no_negative_or_null_crash(client):
     assert data["average_wait_minutes"] == 0
 
 
-def test_health_endpoint(client):
+def test_health_endpoint(client, monkeypatch):
+    from app.core.redis_client import redis_client
+    monkeypatch.setattr(redis_client, "ping", lambda: True)
     resp = client.get("/api/health")
     assert resp.status_code == 200
     body = resp.json()

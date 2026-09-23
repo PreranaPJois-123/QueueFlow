@@ -8,7 +8,7 @@ COPY . .
 
 # VITE_API_URL is baked in at build time since Vite env vars are compiled
 # into the static bundle — pass it as a build arg in docker-compose or CI.
-ARG VITE_API_URL=http://localhost:8000
+ARG VITE_API_URL
 ENV VITE_API_URL=$VITE_API_URL
 RUN npm run build
 

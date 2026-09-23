@@ -33,7 +33,7 @@ class ConnectionManager:
         conns = self._connections.get(queue_id, set())
         dead = []
         message = json.dumps(payload)
-        for ws in conns:
+        for ws in tuple(conns):
             try:
                 await ws.send_text(message)
             except Exception:

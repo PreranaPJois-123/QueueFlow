@@ -43,7 +43,7 @@ async def log_requests(request: Request, call_next):
 # Global lightweight rate limiting on write-heavy / abuse-prone routes.
 app.include_router(auth.router, dependencies=[Depends(rate_limit)])
 app.include_router(services.router)
-app.include_router(queues.router, dependencies=[Depends(rate_limit)])
+app.include_router(queues.router)
 app.include_router(staff.router)
 app.include_router(tickets.router)
 app.include_router(appointments.router)
@@ -62,15 +62,15 @@ def health():
     try:
         redis_client.ping()
     except Exception:
-        redis_ok = True if settings.ENV == "test" else False
+        redis_ok = False
 
     status_str = "healthy" if (db_ok and redis_ok) else "degraded"
-    return {
+    return JSONResponse(status_code=200 if db_ok and redis_ok else 503, content={
         "status": status_str,
         "service": settings.APP_NAME,
         "database": "up" if db_ok else "down",
         "redis": "up" if redis_ok else "down",
-    }
+    })
 
 
 @app.get("/")

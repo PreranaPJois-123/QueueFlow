@@ -4,7 +4,6 @@ import { useAuth } from '../lib/auth'
 import { extractErrorMessage } from '../lib/api'
 import { Button } from '../components/Button'
 import { ErrorState } from '../components/States'
-import type { UserRole } from '../types'
 
 export default function Register() {
   const { register } = useAuth()
@@ -12,7 +11,6 @@ export default function Register() {
   const [fullName, setFullName] = useState('')
   const [email, setEmail] = useState('')
   const [password, setPassword] = useState('')
-  const [role, setRole] = useState<UserRole>('CUSTOMER')
   const [error, setError] = useState<string | null>(null)
   const [loading, setLoading] = useState(false)
 
@@ -25,8 +23,8 @@ export default function Register() {
     }
     setLoading(true)
     try {
-      await register(email, password, fullName, role)
-      navigate(role === 'CUSTOMER' ? '/dashboard' : '/staff/dashboard')
+      await register(email, password, fullName)
+      navigate('/dashboard')
     } catch (err) {
       setError(extractErrorMessage(err))
     } finally {
@@ -80,18 +78,7 @@ export default function Register() {
             />
             <p className="mt-1 text-xs text-ink-400">At least 8 characters.</p>
           </div>
-          <div>
-            <label htmlFor="role" className="mb-1.5 block text-sm font-medium text-ink-700">I am a</label>
-            <select
-              id="role"
-              value={role}
-              onChange={(e) => setRole(e.target.value as UserRole)}
-              className="w-full rounded-lg border border-ink-200 bg-white px-3 py-2.5 text-sm outline-none focus:border-signal-500"
-            >
-              <option value="CUSTOMER">Customer — joining queues</option>
-              <option value="STAFF">Staff — managing queues</option>
-            </select>
-          </div>
+          <p className="text-xs text-ink-400">Staff accounts are provided by your administrator.</p>
           <Button type="submit" loading={loading} className="mt-2 w-full">
             Create account
           </Button>

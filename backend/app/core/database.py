@@ -16,7 +16,8 @@ else:
         settings.sync_database_url,
         pool_pre_ping=True,
         pool_size=10,
-        max_overflow=20,
+        max_overflow=10,
+        connect_args={"connect_timeout": 5},
     )
 
 SessionLocal = sessionmaker(autocommit=False, autoflush=False, bind=engine)

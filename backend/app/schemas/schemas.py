@@ -1,7 +1,7 @@
 from datetime import datetime
 from typing import Optional
 
-from pydantic import BaseModel, EmailStr, Field, ConfigDict
+from pydantic import BaseModel, EmailStr, Field, ConfigDict, field_validator
 
 from app.models.models import UserRole, QueueStatus, TicketStatus, AppointmentStatus, NotificationType
 
@@ -13,6 +13,13 @@ class UserRegister(BaseModel):
     password: str = Field(min_length=8, max_length=72)  # 72 bytes is bcrypt's hard limit
     full_name: str = Field(min_length=1, max_length=255)
     role: UserRole = UserRole.CUSTOMER
+
+    @field_validator("password")
+    @classmethod
+    def password_bytes(cls, value):
+        if len(value.encode("utf-8")) > 72:
+            raise ValueError("Password must be at most 72 UTF-8 bytes")
+        return value
 
 
 class UserLogin(BaseModel):
@@ -43,7 +50,7 @@ class ServiceCreate(BaseModel):
 
 
 class ServiceUpdate(BaseModel):
-    name: Optional[str] = None
+    name: Optional[str] = Field(default=None, min_length=1, max_length=255)
     description: Optional[str] = None
     is_active: Optional[bool] = None
 

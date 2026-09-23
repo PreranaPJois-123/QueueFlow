@@ -11,18 +11,10 @@ from sqlalchemy import create_engine
 from sqlalchemy.orm import sessionmaker
 from sqlalchemy.pool import StaticPool
 
-from app.core.database import Base, get_db
+from app.core.database import Base, get_db, engine
 from app.main import app
 
 TEST_DATABASE_URL = os.environ["DATABASE_URL"]
-if TEST_DATABASE_URL.startswith("sqlite"):
-    engine = create_engine(
-        TEST_DATABASE_URL,
-        connect_args={"check_same_thread": False},
-        poolclass=StaticPool,
-    )
-else:
-    engine = create_engine(TEST_DATABASE_URL)
 TestSessionLocal = sessionmaker(autocommit=False, autoflush=False, bind=engine)
 
 
@@ -47,7 +39,8 @@ app.dependency_overrides[get_db] = override_get_db
 
 @pytest.fixture
 def client():
-    return TestClient(app)
+    with TestClient(app) as test_client:
+        yield test_client
 
 
 @pytest.fixture
@@ -59,8 +52,14 @@ def db_session():
 
 def register_and_login(client, email, password="testpass123", full_name="Test User", role="CUSTOMER"):
     client.post("/api/auth/register", json={
-        "email": email, "password": password, "full_name": full_name, "role": role,
+        "email": email, "password": password, "full_name": full_name, "role": "CUSTOMER",
     })
+    if role != "CUSTOMER":
+        from app.models.models import User, UserRole
+        with TestSessionLocal() as db:
+            user = db.query(User).filter(User.email == email.lower()).one()
+            user.role = UserRole(role)
+            db.commit()
     resp = client.post("/api/auth/login", json={"email": email, "password": password})
     token = resp.json()["access_token"]
     return {"Authorization": f"Bearer {token}"}

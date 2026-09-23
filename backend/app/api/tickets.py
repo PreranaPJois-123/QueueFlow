@@ -1,3 +1,4 @@
+from starlette.concurrency import run_in_threadpool
 from fastapi import APIRouter, Depends, HTTPException, status
 from sqlalchemy.orm import Session
 
@@ -33,7 +34,7 @@ def get_ticket(ticket_id: str, db: Session = Depends(get_db), current_user: User
     queue = db.query(Queue).filter(Queue.id == ticket.queue_id).first()
     people_ahead = queue_service.get_people_ahead(db, queue, ticket)
     wait = queue_service.estimate_wait_minutes(db, queue, people_ahead)
-    current_label = f"#{queue.current_serving_number}" if queue.current_serving_number is not None else None
+    current_label = queue_service._label(queue.current_serving_number) if queue.current_serving_number is not None else None
 
     return TicketDetailOut(
         ticket=ticket,
@@ -48,7 +49,7 @@ def get_ticket(ticket_id: str, db: Session = Depends(get_db), current_user: User
 @router.post("/{ticket_id}/cancel", response_model=TicketOut)
 async def cancel_ticket(ticket_id: str, db: Session = Depends(get_db),
                          current_user: User = Depends(get_current_user)):
-    ticket = queue_service.cancel_ticket(db, ticket_id, current_user.id)
+    ticket = await run_in_threadpool(queue_service.cancel_ticket, db, ticket_id, current_user.id)
     queue = db.query(Queue).filter(Queue.id == ticket.queue_id).first()
     state = queue_service.build_queue_state(db, queue)
     await manager.broadcast(queue.id, {"event": "queue_state", "data": state})

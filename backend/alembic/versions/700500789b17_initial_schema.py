@@ -155,3 +155,7 @@ def downgrade() -> None:
     op.drop_index(op.f('ix_users_email'), table_name='users')
     op.drop_table('users')
     # ### end Alembic commands ###
+
+    if op.get_bind().dialect.name == "postgresql":
+        for name in ("record_outcome", "notification_type", "ticket_status", "queue_status", "appointment_status", "user_role"):
+            sa.Enum(name=name).drop(op.get_bind(), checkfirst=True)

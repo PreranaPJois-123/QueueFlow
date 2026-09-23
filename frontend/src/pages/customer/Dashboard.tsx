@@ -47,7 +47,10 @@ export default function CustomerDashboard() {
       setDetail(null)
       return
     }
-    api.get<TicketDetail>(`/api/tickets/${activeTicket.id}`).then((r) => setDetail(r.data)).catch(() => {})
+    api.get<TicketDetail>(`/api/tickets/${activeTicket.id}`).then((r) => {
+      setDetail(r.data)
+      setTickets((previous) => previous?.map((ticket) => ticket.id === r.data.ticket.id ? r.data.ticket : ticket) ?? null)
+    }).catch((err) => setError(extractErrorMessage(err)))
   }, [activeTicket?.id, liveQueue])
 
   return (

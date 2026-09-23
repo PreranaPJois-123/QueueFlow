@@ -11,16 +11,17 @@ from app.core.config import settings
 from app.core.redis_client import redis_client
 
 
-async def rate_limit(request: Request):
+def rate_limit(request: Request):
     if settings.ENV == "test":
         return
     client_ip = request.client.host if request.client else "unknown"
     window = int(time.time() // 60)
     key = f"ratelimit:{client_ip}:{window}"
     try:
-        count = redis_client.incr(key)
-        if count == 1:
-            redis_client.expire(key, 65)
+        with redis_client.pipeline(transaction=True) as pipeline:
+            pipeline.incr(key)
+            pipeline.expire(key, 65)
+            count, _ = pipeline.execute()
         if count > settings.RATE_LIMIT_PER_MINUTE:
             raise HTTPException(status.HTTP_429_TOO_MANY_REQUESTS, "Too many requests, slow down")
     except HTTPException:

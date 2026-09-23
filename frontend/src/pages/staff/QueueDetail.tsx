@@ -36,6 +36,7 @@ export default function StaffQueueDetail() {
     try {
       const { data } = await api.get<QueueState>(`/api/staff/queues/${id}/state`)
       setState(data)
+      await loadCalledTicket(data)
     } catch (err) {
       setError(extractErrorMessage(err))
     }

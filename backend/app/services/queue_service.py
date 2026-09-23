@@ -19,7 +19,7 @@ from sqlalchemy.orm import Session
 
 from app.core.config import settings
 from app.models.models import (
-    Queue, Ticket, TicketStatus, QueueStatus, ServiceRecord, User, Notification, NotificationType,
+    Service, Queue, Ticket, TicketStatus, QueueStatus, ServiceRecord, User, Notification, NotificationType,
 )
 
 
@@ -55,13 +55,13 @@ def _to_utc(dt: Optional[datetime]) -> Optional[datetime]:
 
 
 def get_people_ahead(db: Session, queue: Queue, ticket: Ticket) -> int:
-    if ticket.status not in (TicketStatus.WAITING, TicketStatus.CALLED):
+    if ticket.status not in (TicketStatus.WAITING, TicketStatus.CALLED, TicketStatus.SERVING):
         return 0
     return (
         db.query(Ticket)
         .filter(
             Ticket.queue_id == queue.id,
-            Ticket.status.in_([TicketStatus.WAITING, TicketStatus.CALLED]),
+            Ticket.status.in_([TicketStatus.WAITING, TicketStatus.CALLED, TicketStatus.SERVING]),
             Ticket.token_number < ticket.token_number,
         )
         .count()
@@ -74,15 +74,25 @@ def estimate_wait_minutes(db: Session, queue: Queue, people_ahead: int) -> int:
 
 
 def _lock_queue(db: Session, queue_id: str) -> Queue:
-    queue = db.query(Queue).filter(Queue.id == queue_id).with_for_update().first()
+    queue = db.query(Queue).filter(Queue.id == queue_id).populate_existing().with_for_update().first()
     if queue is None:
         raise HTTPException(status.HTTP_404_NOT_FOUND, "Queue not found")
     return queue
 
 
+def _lock_ticket(db: Session, ticket_id: str) -> Ticket:
+    queue_id = db.query(Ticket.queue_id).filter(Ticket.id == ticket_id).scalar()
+    if queue_id is None:
+        raise HTTPException(404, "Ticket not found")
+    _lock_queue(db, queue_id)
+    return db.query(Ticket).filter(Ticket.id == ticket_id).populate_existing().with_for_update().one()
+
+
 def join_queue(db: Session, queue_id: str, customer: User) -> Ticket:
     queue = _lock_queue(db, queue_id)
 
+    if not db.get(Service, queue.service_id).is_active:
+        raise HTTPException(409, "Service is inactive")
     if queue.status != QueueStatus.OPEN:
         raise HTTPException(status.HTTP_409_CONFLICT, f"Queue is {queue.status.value.lower()} and not accepting new tickets")
 
@@ -123,7 +133,7 @@ def call_next(db: Session, queue_id: str) -> Optional[Ticket]:
     # Close out anyone currently mid-service? No — staff must explicitly "Serve"/"Skip" first.
     still_serving = (
         db.query(Ticket)
-        .filter(Ticket.queue_id == queue_id, Ticket.status == TicketStatus.CALLED)
+        .filter(Ticket.queue_id == queue_id, Ticket.status.in_([TicketStatus.CALLED, TicketStatus.SERVING]))
         .first()
     )
     if still_serving:
@@ -135,7 +145,7 @@ def call_next(db: Session, queue_id: str) -> Optional[Ticket]:
     next_ticket = (
         db.query(Ticket)
         .filter(Ticket.queue_id == queue_id, Ticket.status == TicketStatus.WAITING)
-        .order_by(Ticket.created_at.asc())
+        .order_by(Ticket.token_number.asc())
         .first()
     )
     if next_ticket is None:
@@ -158,7 +168,7 @@ def call_next(db: Session, queue_id: str) -> Optional[Ticket]:
 
 
 def start_serving(db: Session, ticket_id: str) -> Ticket:
-    ticket = db.query(Ticket).filter(Ticket.id == ticket_id).with_for_update().first()
+    ticket = _lock_ticket(db, ticket_id)
     if ticket is None:
         raise HTTPException(status.HTTP_404_NOT_FOUND, "Ticket not found")
     if ticket.status != TicketStatus.CALLED:
@@ -173,7 +183,7 @@ def start_serving(db: Session, ticket_id: str) -> Ticket:
 
 def serve_ticket(db: Session, ticket_id: str) -> Ticket:
     """Mark a ticket fully served and record the service duration for wait-time estimation."""
-    ticket = db.query(Ticket).filter(Ticket.id == ticket_id).with_for_update().first()
+    ticket = _lock_ticket(db, ticket_id)
     if ticket is None:
         raise HTTPException(status.HTTP_404_NOT_FOUND, "Ticket not found")
     if ticket.status not in (TicketStatus.CALLED, TicketStatus.SERVING):
@@ -181,7 +191,7 @@ def serve_ticket(db: Session, ticket_id: str) -> Ticket:
 
     now = datetime.now(timezone.utc)
     if ticket.serving_started_at is None:
-        ticket.serving_started_at = now
+        ticket.serving_started_at = ticket.called_at or now
     ticket.status = TicketStatus.SERVED
     ticket.served_at = now
 
@@ -199,7 +209,7 @@ def serve_ticket(db: Session, ticket_id: str) -> Ticket:
         outcome=TicketStatus.SERVED,
     ))
 
-    queue = db.query(Queue).filter(Queue.id == ticket.queue_id).with_for_update().first()
+    queue = db.query(Queue).filter(Queue.id == ticket.queue_id).populate_existing().with_for_update().first()
     if queue and queue.current_serving_number == ticket.token_number:
         queue.current_serving_number = None
 
@@ -209,16 +219,16 @@ def serve_ticket(db: Session, ticket_id: str) -> Ticket:
 
 
 def skip_ticket(db: Session, ticket_id: str) -> Ticket:
-    ticket = db.query(Ticket).filter(Ticket.id == ticket_id).with_for_update().first()
+    ticket = _lock_ticket(db, ticket_id)
     if ticket is None:
         raise HTTPException(status.HTTP_404_NOT_FOUND, "Ticket not found")
-    if ticket.status not in (TicketStatus.WAITING, TicketStatus.CALLED):
+    if ticket.status not in (TicketStatus.WAITING, TicketStatus.CALLED, TicketStatus.SERVING):
         raise HTTPException(status.HTTP_409_CONFLICT, f"Cannot skip a ticket in status {ticket.status.value}")
 
     ticket.status = TicketStatus.SKIPPED
     ticket.skipped_at = datetime.now(timezone.utc)
 
-    queue = db.query(Queue).filter(Queue.id == ticket.queue_id).with_for_update().first()
+    queue = db.query(Queue).filter(Queue.id == ticket.queue_id).populate_existing().with_for_update().first()
     if queue and queue.current_serving_number == ticket.token_number:
         queue.current_serving_number = None
 
@@ -228,7 +238,7 @@ def skip_ticket(db: Session, ticket_id: str) -> Ticket:
 
 
 def cancel_ticket(db: Session, ticket_id: str, customer_id: str) -> Ticket:
-    ticket = db.query(Ticket).filter(Ticket.id == ticket_id).with_for_update().first()
+    ticket = _lock_ticket(db, ticket_id)
     if ticket is None:
         raise HTTPException(status.HTTP_404_NOT_FOUND, "Ticket not found")
     if ticket.customer_id != customer_id:
@@ -265,6 +275,9 @@ def resume_queue(db: Session, queue_id: str) -> Queue:
 
 def close_queue(db: Session, queue_id: str) -> Queue:
     queue = _lock_queue(db, queue_id)
+    if db.query(Ticket).filter(Ticket.queue_id == queue_id, Ticket.status.in_(
+            [TicketStatus.WAITING, TicketStatus.CALLED, TicketStatus.SERVING])).first():
+        raise HTTPException(409, "Finish or skip active tickets before closing the queue")
     queue.status = QueueStatus.CLOSED
     db.commit()
     db.refresh(queue)
@@ -272,15 +285,17 @@ def close_queue(db: Session, queue_id: str) -> Queue:
 
 
 def build_queue_state(db: Session, queue: Queue) -> dict:
+    if queue is None:
+        raise HTTPException(404, "Queue not found")
     waiting = (
         db.query(Ticket)
         .filter(Ticket.queue_id == queue.id, Ticket.status == TicketStatus.WAITING)
-        .order_by(Ticket.created_at.asc())
+        .order_by(Ticket.token_number.asc())
         .all()
     )
     called = (
         db.query(Ticket)
-        .filter(Ticket.queue_id == queue.id, Ticket.status == TicketStatus.CALLED)
+        .filter(Ticket.queue_id == queue.id, Ticket.status.in_([TicketStatus.CALLED, TicketStatus.SERVING]))
         .first()
     )
     current_label = None

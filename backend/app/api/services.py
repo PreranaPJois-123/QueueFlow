@@ -42,6 +42,8 @@ def update_service(service_id: str, payload: ServiceUpdate, db: Session = Depend
     if not service:
         raise HTTPException(status.HTTP_404_NOT_FOUND, "Service not found")
     for field, value in payload.model_dump(exclude_unset=True).items():
+        if field in ("name", "is_active") and value is None:
+            raise HTTPException(422, f"{field} cannot be null")
         setattr(service, field, value)
     db.commit()
     db.refresh(service)

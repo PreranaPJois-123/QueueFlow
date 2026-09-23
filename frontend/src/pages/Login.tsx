@@ -1,5 +1,5 @@
 import { useState } from 'react'
-import { Link, useLocation, useNavigate } from 'react-router-dom'
+import { Link, Navigate, useLocation, useNavigate } from 'react-router-dom'
 import { useAuth } from '../lib/auth'
 import { extractErrorMessage } from '../lib/api'
 import { Button } from '../components/Button'
@@ -30,8 +30,7 @@ export default function Login() {
   }
 
   if (user) {
-    navigate(user.role === 'CUSTOMER' ? '/dashboard' : '/staff/dashboard')
-    return null
+    return <Navigate to={user.role === 'CUSTOMER' ? '/dashboard' : '/staff/dashboard'} replace />
   }
 
   return (

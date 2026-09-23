@@ -1,40 +1,49 @@
+# yaml-language-server: $schema=https://render.com/schema/render.yaml.json
+# Free plans preserve the existing budget; see docs/DEPLOYMENT.md for limits.
 services:
+  - type: keyvalue
+    name: queueflow-redis
+    plan: free
+    region: oregon
+    ipAllowList: []
+    maxmemoryPolicy: allkeys-lru
+
   - type: web
     name: queueflow-backend
     runtime: docker
-    dockerContext: backend
-    dockerfilePath: backend/Dockerfile
+    dockerContext: ./backend
+    dockerfilePath: ./backend/Dockerfile
     plan: free
     region: oregon
     healthCheckPath: /api/health
     envVars:
+      - key: ENV
+        value: production
+      - key: DEBUG
+        value: "false"
       - key: DATABASE_URL
         fromDatabase:
           name: queueflow-db
           property: connectionString
       - key: REDIS_URL
         fromService:
-          type: redis
+          type: keyvalue
           name: queueflow-redis
           property: connectionString
       - key: JWT_SECRET_KEY
         generateValue: true
+      # Explicit actual frontend origin; avoids reciprocal service dependencies.
+      # Existing Blueprints require this value to be set in the backend service.
       - key: CORS_ORIGINS
-        value: "*"
+        sync: false
       - key: ACCESS_TOKEN_EXPIRE_MINUTES
         value: "1440"
       - key: RATE_LIMIT_PER_MINUTE
         value: "120"
-      - key: SMART_ALERT_THRESHOLD
-        value: "3"
-      - key: DEFAULT_AVG_SERVICE_MINUTES
-        value: "5"
 
   - type: web
     name: queueflow-frontend
     runtime: static
-    plan: free
-    region: oregon
     rootDir: frontend
     buildCommand: npm ci && npm run build
     staticPublishPath: ./dist
@@ -43,11 +52,13 @@ services:
         source: /*
         destination: /index.html
     envVars:
+      - key: NODE_VERSION
+        value: "22"
       - key: VITE_API_URL
         fromService:
           type: web
           name: queueflow-backend
-          property: url
+          envVarKey: RENDER_EXTERNAL_URL
 
 databases:
   - name: queueflow-db
@@ -55,3 +66,4 @@ databases:
     region: oregon
     databaseName: queueflow
     user: queueflow_user
+    ipAllowList: []

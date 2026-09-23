@@ -1,10 +1,11 @@
 from fastapi import APIRouter, Depends, HTTPException, status
 from sqlalchemy.orm import Session
+from sqlalchemy.exc import IntegrityError
 
 from app.core.database import get_db
 from app.core.deps import get_current_user
 from app.core.security import hash_password, verify_password, create_access_token
-from app.models.models import User
+from app.models.models import User, UserRole
 from app.schemas.schemas import UserRegister, UserLogin, Token, UserOut
 
 router = APIRouter(prefix="/api/auth", tags=["auth"])
@@ -12,6 +13,8 @@ router = APIRouter(prefix="/api/auth", tags=["auth"])
 
 @router.post("/register", response_model=UserOut, status_code=status.HTTP_201_CREATED)
 def register(payload: UserRegister, db: Session = Depends(get_db)):
+    if payload.role != UserRole.CUSTOMER:
+        raise HTTPException(403, "Staff and admin accounts must be provisioned by an administrator")
     existing = db.query(User).filter(User.email == payload.email.lower()).first()
     if existing:
         raise HTTPException(status.HTTP_409_CONFLICT, "An account with this email already exists")
@@ -23,7 +26,11 @@ def register(payload: UserRegister, db: Session = Depends(get_db)):
         role=payload.role,
     )
     db.add(user)
-    db.commit()
+    try:
+        db.commit()
+    except IntegrityError:
+        db.rollback()
+        raise HTTPException(409, "An account with this email already exists")
     db.refresh(user)
     return user
 
