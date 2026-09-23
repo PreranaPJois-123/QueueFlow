@@ -78,3 +78,28 @@ Render navigation request was rejected because a saved browser permission blocks
 `dashboard.render.com`. Authorize GitHub repository access and change that saved
 Render browser permission to continue. These are account/access blockers; no
 code change can resolve them. Docker is still unavailable.
+
+## GitHub publication and CI — 2026-09-23 (supersedes earlier access/test gaps)
+
+GitHub access is now authorized. All repaired source was published to main as
+`9fdc361dbd6694120f5aa8a4e5cac9f1abfd5c14` with the exact same source tree as the
+locally tested package. GitHub Actions run 35816838915 completed successfully:
+
+https://github.com/PreranaPJois-123/QueueFlow/actions/runs/35816838915
+
+- Backend: dependency installation and pip check passed.
+- Real PostgreSQL 16: Alembic upgrade, schema comparison, downgrade and re-upgrade passed.
+- All **61 tests passed**, with two upstream deprecation warnings, in 58.39 seconds
+  against PostgreSQL with a Redis service container.
+- Backend Docker image build passed.
+- Frontend npm ci, lint, TypeScript/Vite build and Docker image build passed.
+
+Docker image builds are now verified in CI. The full Docker Compose application
+runtime, dedicated concurrent-lock stress tests, Render services and live-browser
+flows are still unverified. Rate-limiting behavior was verified separately using
+real local Redis; ENV=test bypasses it in the regression suite.
+
+Render navigation was attempted again after authorization was reported, but the
+browser still rejected it due to a saved permission blocking dashboard.render.com.
+GitHub authorization is resolved; only the Render permission remains an access
+blocker. No Render URL or successful deployment is claimed.

@@ -51,8 +51,8 @@ Local example URLs are development-only. Production builds require `VITE_API_URL
 Render builds require a public HTTPS origin. Never commit populated `.env` files.
 
 For the optional local Docker stack, copy root `.env.example` to `.env` and set a
-real `JWT_SECRET_KEY`, then run `docker compose up --build`. Docker runtime was not
-available for verification in this repair session.
+real `JWT_SECRET_KEY`, then run `docker compose up --build`. Docker images were built successfully in GitHub CI; the full Compose runtime
+has not been exercised.
 
 ## Testing and CI
 
@@ -71,8 +71,8 @@ Lint exits successfully with existing React hook/fast-refresh warnings.
 
 `.github/workflows/ci.yml` adds PostgreSQL/Redis service containers, migration
 upgrade/check/downgrade/re-upgrade, backend tests, frontend checks and Docker image
-builds. That workflow has not been run on GitHub in this session. It does not claim
-a deployment and contains no deployment credentials.
+builds. That workflow passed on GitHub, including all 61 tests against PostgreSQL
+and both Docker image builds. It contains no deployment credentials.
 
 ## API and schema
 
@@ -84,8 +84,8 @@ WebSockets subscribe at `/api/queues/{queue_id}/ws`.
 
 ## Limits
 
-No live frontend/backend URLs are verified. Docker and real PostgreSQL execution
-remain unverified locally. The included free Render plans are for a preview and
+No live frontend/backend URLs are verified. PostgreSQL migrations/tests and Docker builds passed in CI; full Compose
+runtime and live deployment remain unverified. The included free Render plans are for a preview and
 must be replaced with approved paid plans for an ongoing production service.
 JWTs are stored in browser local storage; logout clears that copy, without
 server-side revocation. Notifications are in-app only. Real-time fan-out is

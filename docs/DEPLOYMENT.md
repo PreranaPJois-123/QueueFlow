@@ -4,7 +4,9 @@
 
 Source repairs and local verification are complete to the extent documented in
 [VERIFICATION.md](VERIFICATION.md). No Render deployment or live browser verification
-was performed: access to the Render dashboard was denied. No live URL is claimed.
+was performed: access to the Render dashboard was denied. GitHub publication,
+PostgreSQL migration/tests and both Docker builds have since passed in CI.
+No live URL is claimed.
 
 ## Blueprint
 
