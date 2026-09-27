@@ -26,6 +26,7 @@ export default function Services() {
         const map: Record<string, Queue[]> = {}
         data.forEach((s, i) => { map[s.id] = results[i].data })
         setQueuesByService(map)
+        setError(null)
       } catch (err) {
         setError(extractErrorMessage(err))
       }
@@ -60,7 +61,7 @@ export default function Services() {
             <Skeleton className="h-28 w-full" />
           </>
         ) : services.length === 0 ? (
-          <EmptyState title="No services available yet" body="Check back once staff have added services." />
+          <EmptyState title="No services available yet" body="Staff have not published any services. Once they do, you can join an open queue or schedule a visit." />
         ) : (
           services.map((service) => {
             const queues = queuesByService[service.id] ?? []

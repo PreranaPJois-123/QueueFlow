@@ -25,8 +25,10 @@ export default function StaffCustomers() {
         })
         combined.sort((a, b) => new Date(a.created_at).getTime() - new Date(b.created_at).getTime())
         setRows(combined)
+        setError(null)
       } catch (err) {
         setError(extractErrorMessage(err))
+        setRows([])
       }
     }
     load()

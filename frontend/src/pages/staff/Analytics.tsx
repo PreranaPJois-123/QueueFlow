@@ -21,13 +21,13 @@ export default function StaffAnalytics() {
 
       {error && <div className="mt-6"><ErrorState message={error} /></div>}
 
-      {!data ? (
+      {!data && !error ? (
         <div className="mt-6 grid gap-4 sm:grid-cols-3">
           <Skeleton className="h-24 w-full" />
           <Skeleton className="h-24 w-full" />
           <Skeleton className="h-24 w-full" />
         </div>
-      ) : (
+      ) : data && !error ? (
         <>
           <div className="mt-6 grid gap-4 sm:grid-cols-3">
             <Stat label="Served today" value={data.customers_served_today} />
@@ -52,7 +52,7 @@ export default function StaffAnalytics() {
             )}
           </div>
         </>
-      )}
+      ) : null}
     </AppShell>
   )
 }

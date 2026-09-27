@@ -19,6 +19,7 @@ const staffNav: NavItem[] = [
   { to: '/staff/dashboard', label: 'Dashboard' },
   { to: '/staff/queues', label: 'Queues' },
   { to: '/staff/customers', label: 'Customers' },
+  { to: '/staff/appointments', label: 'Appointments' },
   { to: '/staff/analytics', label: 'Analytics' },
   { to: '/staff/settings', label: 'Settings' },
 ]

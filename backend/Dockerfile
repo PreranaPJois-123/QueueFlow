@@ -25,4 +25,4 @@ HEALTHCHECK --interval=30s --timeout=5s --start-period=10s --retries=3 \
 
 # Run migrations then start the server. Alembic is idempotent — safe to
 # run on every container start (it no-ops when already at head).
-CMD ["sh", "-c", "alembic upgrade head && exec uvicorn app.main:app --host 0.0.0.0 --port ${PORT:-8000} --workers 1"]
+CMD ["sh", "-c", "alembic upgrade head && QUEUEFLOW_BOOTSTRAP_ADMIN=1 python -m app.provision_user && exec uvicorn app.main:app --host 0.0.0.0 --port ${PORT:-8000} --workers 1"]

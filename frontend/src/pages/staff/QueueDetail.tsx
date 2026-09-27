@@ -104,7 +104,7 @@ export default function StaffQueueDetail() {
             </span>
           </div>
         </div>
-        <div className="flex gap-2">
+        <div className="flex flex-wrap gap-2">
           {queue.status === 'OPEN' && (
             <Button variant="secondary" size="sm" loading={pending === 'pause'}
               onClick={() => runAction('pause', () => api.post(`/api/staff/queues/${id}/pause`), 'Queue paused')}>

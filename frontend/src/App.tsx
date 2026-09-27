@@ -16,6 +16,7 @@ import StaffDashboard from './pages/staff/Dashboard'
 import StaffQueues from './pages/staff/Queues'
 import StaffQueueDetail from './pages/staff/QueueDetail'
 import StaffCustomers from './pages/staff/Customers'
+import StaffAppointments from './pages/staff/Appointments'
 import StaffAnalytics from './pages/staff/Analytics'
 import StaffSettings from './pages/staff/Settings'
 
@@ -40,6 +41,7 @@ export default function App() {
             <Route path="/staff/queues" element={<RequireAuth roles={['STAFF', 'ADMIN']}><StaffQueues /></RequireAuth>} />
             <Route path="/staff/queue/:id" element={<RequireAuth roles={['STAFF', 'ADMIN']}><StaffQueueDetail /></RequireAuth>} />
             <Route path="/staff/customers" element={<RequireAuth roles={['STAFF', 'ADMIN']}><StaffCustomers /></RequireAuth>} />
+            <Route path="/staff/appointments" element={<RequireAuth roles={['STAFF', 'ADMIN']}><StaffAppointments /></RequireAuth>} />
             <Route path="/staff/analytics" element={<RequireAuth roles={['STAFF', 'ADMIN']}><StaffAnalytics /></RequireAuth>} />
             <Route path="/staff/settings" element={<RequireAuth roles={['STAFF', 'ADMIN']}><StaffSettings /></RequireAuth>} />
 

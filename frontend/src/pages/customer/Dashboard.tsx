@@ -7,13 +7,14 @@ import { EmptyState, ErrorState, Skeleton } from '../../components/States'
 import { Button } from '../../components/Button'
 import { TicketStatusBadge } from '../../components/Badge'
 import { useQueueSocket } from '../../lib/useQueueSocket'
-import type { Ticket, TicketDetail, Appointment } from '../../types'
+import type { Ticket, TicketDetail, Appointment, Service } from '../../types'
 
 export default function CustomerDashboard() {
   const { user } = useAuth()
   const [tickets, setTickets] = useState<Ticket[] | null>(null)
   const [detail, setDetail] = useState<TicketDetail | null>(null)
   const [appointments, setAppointments] = useState<Appointment[] | null>(null)
+  const [services, setServices] = useState<Service[] | null>(null)
   const [error, setError] = useState<string | null>(null)
 
   const activeTicket = tickets?.find((t) => t.status === 'WAITING' || t.status === 'CALLED' || t.status === 'SERVING')
@@ -32,14 +33,26 @@ export default function CustomerDashboard() {
     try {
       const { data } = await api.get<Appointment[]>('/api/appointments')
       setAppointments(data.filter((a) => a.status === 'SCHEDULED').slice(0, 3))
-    } catch {
-      // non-critical; dashboard still works without upcoming appointments
+    } catch (err) {
+      setError(extractErrorMessage(err))
+      setAppointments([])
+    }
+  }
+
+  async function loadServices() {
+    try {
+      const { data } = await api.get<Service[]>('/api/services')
+      setServices(data)
+    } catch (err) {
+      setError(extractErrorMessage(err))
+      setServices([])
     }
   }
 
   useEffect(() => {
     loadTickets()
     loadAppointments()
+    loadServices()
   }, [])
 
   useEffect(() => {
@@ -63,6 +76,8 @@ export default function CustomerDashboard() {
       <div className="mt-6 grid gap-6 lg:grid-cols-3">
         <section className="lg:col-span-2">
           {tickets === null ? (
+            <Skeleton className="h-48 w-full" />
+          ) : activeTicket && !detail ? (
             <Skeleton className="h-48 w-full" />
           ) : activeTicket && detail ? (
             <div className="rounded-2xl border border-ink-100 bg-white p-6">
@@ -114,7 +129,7 @@ export default function CustomerDashboard() {
           ) : (
             <EmptyState
               title="No active ticket"
-              body="Join a queue to get a token and start tracking your wait."
+              body={services?.length === 0 ? 'No services are open yet. Staff will publish services here when they are ready.' : 'Join a queue to get a token and start tracking your wait.'}
               action={
                 <Link to="/services">
                   <Button size="sm">Browse services</Button>
@@ -140,11 +155,43 @@ export default function CustomerDashboard() {
               ))}
             </ul>
           )}
+          {services !== null && services.length === 0 && <p className="mt-4 text-sm text-ink-500">Appointments become available when staff publish a service.</p>}
           <Link to="/appointments" className="mt-4 inline-block text-sm font-medium text-signal-700 hover:underline">
             Manage appointments →
           </Link>
         </section>
       </div>
+      <section className="mt-8 rounded-2xl border border-ink-100 bg-white p-6">
+        <div className="flex items-center justify-between gap-4">
+          <div>
+            <h2 className="text-sm font-semibold text-ink-900">Available services</h2>
+            <p className="mt-1 text-sm text-ink-500">Find an open queue or plan a visit.</p>
+          </div>
+          <Link to="/services" className="text-sm font-medium text-signal-700 hover:underline">View all →</Link>
+        </div>
+        {services === null ? <Skeleton className="mt-4 h-16 w-full" /> : services.length === 0 ? (
+          <p className="mt-4 text-sm text-ink-500">No services have been published yet.</p>
+        ) : (
+          <ul className="mt-4 grid gap-3 sm:grid-cols-2">
+            {services.slice(0, 4).map((service) => (
+              <li key={service.id} className="rounded-lg border border-ink-100 px-4 py-3">
+                <p className="font-medium text-ink-900">{service.name}</p>
+                {service.description && <p className="mt-1 text-sm text-ink-500">{service.description}</p>}
+              </li>
+            ))}
+          </ul>
+        )}
+      </section>
+      {tickets && tickets.length > 0 && <section className="mt-8">
+        <h2 className="text-sm font-semibold text-ink-900">Recent tickets</h2>
+        <ul className="mt-3 space-y-2">{tickets.slice(0, 5).map((ticket) => (
+          <li key={ticket.id} className="flex items-center justify-between gap-3 rounded-lg border border-ink-100 bg-white px-4 py-3 text-sm">
+            <span className="font-medium text-ink-900">{ticket.token_label}</span>
+            <span className="text-ink-500">{new Date(ticket.created_at).toLocaleString()}</span>
+            <TicketStatusBadge status={ticket.status} />
+          </li>
+        ))}</ul>
+      </section>}
     </AppShell>
   )
 }

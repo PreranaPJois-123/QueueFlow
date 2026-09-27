@@ -1,15 +1,51 @@
 from starlette.concurrency import run_in_threadpool
-from fastapi import APIRouter, Depends
+from fastapi import APIRouter, Depends, HTTPException
 from sqlalchemy.orm import Session
 
 from app.core.database import get_db
 from app.core.deps import require_staff
-from app.models.models import Queue, Ticket, TicketStatus, User
-from app.schemas.schemas import TicketOut, QueueStateOut, QueueOut
+from app.models.models import Queue, Ticket, TicketStatus, User, Appointment, AppointmentStatus, Service
+from app.schemas.schemas import TicketOut, QueueStateOut, QueueOut, StaffAppointmentOut, AppointmentOut
 from app.services import queue_service
 from app.services.ws_manager import manager
 
 router = APIRouter(prefix="/api/staff", tags=["staff"])
+
+
+@router.get("/appointments", response_model=list[StaffAppointmentOut])
+def list_appointments(db: Session = Depends(get_db), _: User = Depends(require_staff)):
+    rows = (
+        db.query(Appointment, User.full_name, Service.name)
+        .join(User, Appointment.customer_id == User.id)
+        .join(Service, Appointment.service_id == Service.id)
+        .order_by(Appointment.scheduled_time.desc())
+        .all()
+    )
+    return [StaffAppointmentOut(**AppointmentOut.model_validate(appointment).model_dump(),
+                                customer_name=customer_name, service_name=service_name)
+            for appointment, customer_name, service_name in rows]
+
+
+@router.post("/appointments/{appointment_id}/{action}", response_model=AppointmentOut)
+def update_appointment(appointment_id: str, action: str, db: Session = Depends(get_db),
+                       _: User = Depends(require_staff)):
+    transitions = {
+        "check-in": (AppointmentStatus.SCHEDULED, AppointmentStatus.CHECKED_IN),
+        "complete": (AppointmentStatus.CHECKED_IN, AppointmentStatus.COMPLETED),
+        "no-show": (AppointmentStatus.SCHEDULED, AppointmentStatus.NO_SHOW),
+    }
+    if action not in transitions:
+        raise HTTPException(404, "Appointment action not found")
+    appointment = db.query(Appointment).filter(Appointment.id == appointment_id).with_for_update().first()
+    if appointment is None:
+        raise HTTPException(404, "Appointment not found")
+    current, next_status = transitions[action]
+    if appointment.status != current:
+        raise HTTPException(409, f"Appointment must be {current.value.lower().replace('_', ' ')}")
+    appointment.status = next_status
+    db.commit()
+    db.refresh(appointment)
+    return appointment
 
 
 async def _broadcast(db: Session, queue_id: str):

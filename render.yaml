@@ -32,6 +32,14 @@ services:
           property: connectionString
       - key: JWT_SECRET_KEY
         generateValue: true
+      # Optional first administrator; set all three privately on the backend
+      # service before its first deployment. The password is never committed.
+      - key: INITIAL_ADMIN_EMAIL
+        sync: false
+      - key: INITIAL_ADMIN_NAME
+        sync: false
+      - key: INITIAL_ADMIN_PASSWORD
+        sync: false
       # Explicit actual frontend origin; avoids reciprocal service dependencies.
       # Existing Blueprints require this value to be set in the backend service.
       - key: CORS_ORIGINS

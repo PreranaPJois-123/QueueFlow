@@ -26,9 +26,11 @@ export default function StaffQueues() {
       ])
       setQueues(queuesRes.data)
       setServices(servicesRes.data)
-      if (servicesRes.data.length > 0) setServiceId(servicesRes.data[0].id)
+      setError(null)
+      if (servicesRes.data.length > 0) setServiceId((previous) => previous || servicesRes.data[0].id)
     } catch (err) {
       setError(extractErrorMessage(err))
+      setQueues([])
     }
   }
 
@@ -66,7 +68,7 @@ export default function StaffQueues() {
         )}
       </div>
 
-      {services.length === 0 && (
+      {queues !== null && services.length === 0 && !error && (
         <p className="mt-4 text-sm text-ink-400">
           Create a service in <Link to="/staff/settings" className="text-signal-700 hover:underline">Settings</Link> before opening a queue.
         </p>
@@ -106,7 +108,7 @@ export default function StaffQueues() {
         {queues === null ? (
           <Skeleton className="h-40 w-full" />
         ) : queues.length === 0 ? (
-          <EmptyState title="No queues yet" body="Create your first queue above." />
+          <EmptyState title="No queues yet" body={services.length ? 'Create your first queue above.' : 'Create a service in Settings first.'} action={!services.length && <Link to="/staff/settings" className="text-sm font-medium text-signal-700 hover:underline">Manage services →</Link>} />
         ) : (
           <ul className="flex flex-col gap-2">
             {queues.map((q) => (

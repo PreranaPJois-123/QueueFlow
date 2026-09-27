@@ -136,6 +136,11 @@ class AppointmentOut(BaseModel):
     created_at: datetime
 
 
+class StaffAppointmentOut(AppointmentOut):
+    customer_name: str
+    service_name: str
+
+
 # ----------------------------- Analytics -----------------------------
 
 class AnalyticsOut(BaseModel):

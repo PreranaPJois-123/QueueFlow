@@ -4,10 +4,10 @@ Real-time queue and appointment management with React/Vite, FastAPI, PostgreSQL,
 Redis and WebSockets. Customers register, join queues and track tickets; staff
 manage services, queues and ticket transitions.
 
-**Deployment status: blocked, not live-verified.** See
-[verification evidence](docs/VERIFICATION.md) and [Render deployment](docs/DEPLOYMENT.md).
-The source includes a corrected `render.yaml`; passing a build is not proof of a
-working live deployment.
+**Deployment:** The frontend is hosted at
+[queueflow-frontend-wy9t.onrender.com](https://queueflow-frontend-wy9t.onrender.com).
+See [Render deployment](docs/DEPLOYMENT.md) for the initial administrator and
+service setup required before customers can book or join a queue.
 
 ## Architecture
 
@@ -84,8 +84,8 @@ WebSockets subscribe at `/api/queues/{queue_id}/ws`.
 
 ## Limits
 
-No live frontend/backend URLs are verified. PostgreSQL migrations/tests and Docker builds passed in CI; full Compose
-runtime and live deployment remain unverified. The included free Render plans are for a preview and
+Local checks and the existing live frontend alone do not verify every production
+workflow. The included free Render plans are for a preview and
 must be replaced with approved paid plans for an ongoing production service.
 JWTs are stored in browser local storage; logout clears that copy, without
 server-side revocation. Notifications are in-app only. Real-time fan-out is

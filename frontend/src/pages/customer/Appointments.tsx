@@ -25,9 +25,11 @@ export default function Appointments() {
       ])
       setAppointments(apptRes.data)
       setServices(svcRes.data)
-      if (svcRes.data.length > 0) setServiceId(svcRes.data[0].id)
+      setError(null)
+      if (svcRes.data.length > 0) setServiceId((previous) => previous || svcRes.data[0].id)
     } catch (err) {
       setError(extractErrorMessage(err))
+      setAppointments([])
     }
   }
 
@@ -72,7 +74,7 @@ export default function Appointments() {
           <h1 className="text-xl font-semibold text-ink-900">Appointments</h1>
           <p className="mt-1 text-sm text-ink-500">Schedule ahead instead of joining a live queue.</p>
         </div>
-        {services.length > 0 && (
+        {services.length > 0 && !error && (
           <Button size="sm" onClick={() => setShowForm((v) => !v)}>
             {showForm ? 'Close' : 'New appointment'}
           </Button>
@@ -122,12 +124,13 @@ export default function Appointments() {
         {appointments === null ? (
           <Skeleton className="h-32 w-full" />
         ) : appointments.length === 0 ? (
-          <EmptyState title="No appointments yet" body="Schedule one above once services are available." />
+          <EmptyState title="No appointments yet" body={services.length ? 'Choose New appointment to schedule your first visit.' : 'Appointments open when staff publish a service.'} />
         ) : (
           <ul className="flex flex-col gap-2">
             {appointments.map((a) => (
               <li key={a.id} className="flex items-center justify-between rounded-lg border border-ink-100 bg-white px-4 py-3 text-sm">
                 <div>
+                  <p className="font-medium text-ink-900">{services.find((service) => service.id === a.service_id)?.name ?? 'Service unavailable'}</p>
                   <p className="font-medium text-ink-800">{new Date(a.scheduled_time).toLocaleString()}</p>
                   {a.notes && <p className="text-ink-400">{a.notes}</p>}
                 </div>

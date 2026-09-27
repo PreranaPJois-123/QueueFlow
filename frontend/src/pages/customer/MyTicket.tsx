@@ -24,8 +24,10 @@ export default function MyTicket() {
     try {
       const { data } = await api.get<Ticket[]>('/api/tickets/mine')
       setTickets(data)
+      setError(null)
     } catch (err) {
       setError(extractErrorMessage(err))
+      setTickets([])
     }
   }
 
@@ -73,6 +75,8 @@ export default function MyTicket() {
 
       <div className="mt-6">
         {tickets === null ? (
+          <Skeleton className="h-56 w-full" />
+        ) : activeTicket && !detail ? (
           <Skeleton className="h-56 w-full" />
         ) : !activeTicket || !detail ? (
           <EmptyState

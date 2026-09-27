@@ -2,11 +2,10 @@
 
 ## Current state
 
-Source repairs and local verification are complete to the extent documented in
-[VERIFICATION.md](VERIFICATION.md). No Render deployment or live browser verification
-was performed: access to the Render dashboard was denied. GitHub publication,
-PostgreSQL migration/tests and both Docker builds have since passed in CI.
-No live URL is claimed.
+The existing Render frontend is at https://queueflow-frontend-wy9t.onrender.com
+and the backend is at https://queueflow-backend-vkj3.onrender.com. Prior
+verification evidence is in [VERIFICATION.md](VERIFICATION.md). A successful
+build alone does not prove this release's live customer and staff workflows.
 
 ## Blueprint
 
@@ -50,6 +49,14 @@ users. It requires trusted access to the production database. Do not put passwor
 in command-line arguments, source, tickets or build logs. Free Render web services
 have no shell access; provisioning must use another authorized database connection
 or an approved paid service. No production staff account has been created yet.
+
+For a new deployment without shell access, configure `INITIAL_ADMIN_EMAIL`,
+`INITIAL_ADMIN_NAME` and `INITIAL_ADMIN_PASSWORD` as private backend environment
+variables before deploying. Startup provisions an ADMIN only if no admin exists;
+it neither promotes an existing customer nor resets an existing admin. Use a new
+email if the owner's address already belongs to a customer. After first login,
+remove the password environment variable. Create real services in Settings and
+queues in Queues so customer booking and queue joining become available.
 
 JWT logout removes the browser's token. Existing token copies remain valid until
 expiry; no server-side revocation is implemented. Queue WebSockets intentionally

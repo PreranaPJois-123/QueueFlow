@@ -2,7 +2,7 @@ import { useEffect, useState } from 'react'
 import { Link } from 'react-router-dom'
 import { api, extractErrorMessage } from '../../lib/api'
 import { AppShell } from '../../components/AppShell'
-import { ErrorState, Skeleton } from '../../components/States'
+import { EmptyState, ErrorState, Skeleton } from '../../components/States'
 import { QueueStatusBadge } from '../../components/Badge'
 import type { Queue, Analytics } from '../../types'
 
@@ -20,8 +20,10 @@ export default function StaffDashboard() {
         ])
         setQueues(queuesRes.data)
         setAnalytics(analyticsRes.data)
+        setError(null)
       } catch (err) {
         setError(extractErrorMessage(err))
+        setQueues([])
       }
     }
     load()
@@ -36,11 +38,11 @@ export default function StaffDashboard() {
 
       {error && <div className="mt-6"><ErrorState message={error} /></div>}
 
-      <div className="mt-6 grid gap-4 sm:grid-cols-3">
+      {(!error || analytics) && <div className="mt-6 grid gap-4 sm:grid-cols-3">
         <StatCard label="Active queues" value={analytics?.active_queues} loading={!analytics} />
         <StatCard label="Served today" value={analytics?.customers_served_today} loading={!analytics} />
         <StatCard label="Avg. wait (min)" value={analytics?.average_wait_minutes} loading={!analytics} />
-      </div>
+      </div>}
 
       <div className="mt-8">
         <div className="flex items-center justify-between">
@@ -52,7 +54,7 @@ export default function StaffDashboard() {
           {queues === null ? (
             <Skeleton className="h-16 w-full" />
           ) : openQueues.length === 0 ? (
-            <p className="text-sm text-ink-400">No open queues right now.</p>
+            <EmptyState title="No open queues" body="Create a service, then open a queue to start accepting customers." action={<Link to="/staff/queues" className="text-sm font-medium text-signal-700 hover:underline">Set up a queue →</Link>} />
           ) : (
             openQueues.map((q) => (
               <Link

@@ -12,6 +12,7 @@ export default function StaffSettings() {
   const [showForm, setShowForm] = useState(false)
   const [name, setName] = useState('')
   const [description, setDescription] = useState('')
+  const [editingId, setEditingId] = useState<string | null>(null)
   const [submitting, setSubmitting] = useState(false)
   const { push } = useToast()
 
@@ -19,8 +20,10 @@ export default function StaffSettings() {
     try {
       const { data } = await api.get<Service[]>('/api/services', { params: { active_only: false } })
       setServices(data)
+      setError(null)
     } catch (err) {
       setError(extractErrorMessage(err))
+      setServices([])
     }
   }
 
@@ -32,11 +35,16 @@ export default function StaffSettings() {
     e.preventDefault()
     setSubmitting(true)
     try {
-      await api.post('/api/services', { name, description: description || undefined })
-      push('Service created', 'success')
+      if (editingId) {
+        await api.patch(`/api/services/${editingId}`, { name, description })
+      } else {
+        await api.post('/api/services', { name, description: description || undefined })
+      }
+      push(editingId ? 'Service updated' : 'Service created', 'success')
       setName('')
       setDescription('')
       setShowForm(false)
+      setEditingId(null)
       load()
     } catch (err) {
       push(extractErrorMessage(err), 'error')
@@ -55,6 +63,20 @@ export default function StaffSettings() {
     }
   }
 
+  function startEdit(service: Service) {
+    setEditingId(service.id)
+    setName(service.name)
+    setDescription(service.description ?? '')
+    setShowForm(true)
+  }
+
+  function closeForm() {
+    setShowForm(false)
+    setEditingId(null)
+    setName('')
+    setDescription('')
+  }
+
   return (
     <AppShell variant="staff">
       <div className="flex items-center justify-between">
@@ -62,7 +84,7 @@ export default function StaffSettings() {
           <h1 className="text-xl font-semibold text-ink-900">Settings</h1>
           <p className="mt-1 text-sm text-ink-500">Manage the services customers can join a queue for.</p>
         </div>
-        <Button size="sm" onClick={() => setShowForm((v) => !v)}>
+        <Button size="sm" onClick={() => showForm ? closeForm() : setShowForm(true)}>
           {showForm ? 'Close' : 'New service'}
         </Button>
       </div>
@@ -71,6 +93,7 @@ export default function StaffSettings() {
 
       {showForm && (
         <form onSubmit={handleCreate} className="mt-6 flex flex-col gap-4 rounded-2xl border border-ink-100 bg-white p-6 sm:max-w-md">
+          <h2 className="text-sm font-semibold text-ink-900">{editingId ? 'Edit service' : 'New service'}</h2>
           <div>
             <label className="mb-1.5 block text-sm font-medium text-ink-700">Service name</label>
             <input
@@ -90,7 +113,7 @@ export default function StaffSettings() {
               className="w-full rounded-lg border border-ink-200 px-3 py-2.5 text-sm outline-none focus:border-signal-500"
             />
           </div>
-          <Button type="submit" loading={submitting} className="w-full">Create service</Button>
+          <Button type="submit" loading={submitting} className="w-full">{editingId ? 'Save changes' : 'Create service'}</Button>
         </form>
       )}
 
@@ -98,7 +121,7 @@ export default function StaffSettings() {
         {services === null ? (
           <Skeleton className="h-40 w-full" />
         ) : services.length === 0 ? (
-          <EmptyState title="No services yet" body="Create your first service above." />
+          <EmptyState title="No services yet" body="Create a real service to unlock queues and appointments for customers." />
         ) : (
           <ul className="flex flex-col gap-2">
             {services.map((s) => (
@@ -107,9 +130,12 @@ export default function StaffSettings() {
                   <p className="text-sm font-medium text-ink-800">{s.name}</p>
                   {s.description && <p className="text-sm text-ink-400">{s.description}</p>}
                 </div>
-                <Button variant="secondary" size="sm" onClick={() => toggleActive(s)}>
-                  {s.is_active ? 'Deactivate' : 'Activate'}
-                </Button>
+                <div className="flex flex-wrap gap-2">
+                  <Button variant="ghost" size="sm" onClick={() => startEdit(s)}>Edit</Button>
+                  <Button variant="secondary" size="sm" onClick={() => toggleActive(s)}>
+                    {s.is_active ? 'Deactivate' : 'Activate'}
+                  </Button>
+                </div>
               </li>
             ))}
           </ul>
