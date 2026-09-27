@@ -48,7 +48,8 @@ The command prompts privately for the password and refuses to overwrite existing
 users. It requires trusted access to the production database. Do not put passwords
 in command-line arguments, source, tickets or build logs. Free Render web services
 have no shell access; provisioning must use another authorized database connection
-or an approved paid service. No production staff account has been created yet.
+or an approved paid service. Check the live user records before assuming a
+production staff account exists.
 
 For a new deployment without shell access, configure `INITIAL_ADMIN_EMAIL`,
 `INITIAL_ADMIN_NAME` and `INITIAL_ADMIN_PASSWORD` as private backend environment
