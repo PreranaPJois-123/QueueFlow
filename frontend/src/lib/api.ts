@@ -5,7 +5,8 @@ export const WS_BASE = API_BASE.replace(/^http/, 'ws')
 
 export const api = axios.create({
   baseURL: API_BASE,
-  timeout: 15000,
+  // Render free instances can take over 50 seconds to wake after inactivity.
+  timeout: 120000,
 })
 
 api.interceptors.request.use((config) => {
@@ -34,6 +35,7 @@ export function extractErrorMessage(error: unknown): string {
     const detail = error.response?.data?.detail
     if (typeof detail === 'string') return detail
     if (Array.isArray(detail) && detail[0]?.msg) return detail[0].msg
+    if (error.code === 'ECONNABORTED') return 'The server took too long to respond. Please try again.'
     if (error.message === 'Network Error') return 'Could not reach the server. Is the backend running?'
   }
   return 'Something went wrong. Please try again.'
