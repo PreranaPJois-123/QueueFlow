@@ -149,6 +149,7 @@ export default function CustomerDashboard() {
             <ul className="mt-3 flex flex-col gap-3">
               {appointments.map((a) => (
                 <li key={a.id} className="rounded-lg border border-ink-100 px-3 py-2 text-sm">
+                  <p className="font-medium text-ink-900">{services?.find((service) => service.id === a.service_id)?.name ?? 'Appointment'}</p>
                   <p className="font-medium text-ink-800">{new Date(a.scheduled_time).toLocaleString()}</p>
                   {a.notes && <p className="text-ink-400">{a.notes}</p>}
                 </li>

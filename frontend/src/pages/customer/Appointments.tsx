@@ -21,12 +21,13 @@ export default function Appointments() {
     try {
       const [apptRes, svcRes] = await Promise.all([
         api.get<Appointment[]>('/api/appointments'),
-        api.get<Service[]>('/api/services'),
+        api.get<Service[]>('/api/services', { params: { active_only: false } }),
       ])
       setAppointments(apptRes.data)
       setServices(svcRes.data)
       setError(null)
-      if (svcRes.data.length > 0) setServiceId((previous) => previous || svcRes.data[0].id)
+      const firstActive = svcRes.data.find((service) => service.is_active)
+      if (firstActive) setServiceId((previous) => previous || firstActive.id)
     } catch (err) {
       setError(extractErrorMessage(err))
       setAppointments([])
@@ -36,6 +37,8 @@ export default function Appointments() {
   useEffect(() => {
     load()
   }, [])
+
+  const activeServices = services.filter((service) => service.is_active)
 
   async function handleCreate(e: React.FormEvent) {
     e.preventDefault()
@@ -74,7 +77,7 @@ export default function Appointments() {
           <h1 className="text-xl font-semibold text-ink-900">Appointments</h1>
           <p className="mt-1 text-sm text-ink-500">Schedule ahead instead of joining a live queue.</p>
         </div>
-        {services.length > 0 && !error && (
+        {activeServices.length > 0 && !error && (
           <Button size="sm" onClick={() => setShowForm((v) => !v)}>
             {showForm ? 'Close' : 'New appointment'}
           </Button>
@@ -92,7 +95,7 @@ export default function Appointments() {
               onChange={(e) => setServiceId(e.target.value)}
               className="w-full rounded-lg border border-ink-200 bg-white px-3 py-2.5 text-sm outline-none focus:border-signal-500"
             >
-              {services.map((s) => (
+              {activeServices.map((s) => (
                 <option key={s.id} value={s.id}>{s.name}</option>
               ))}
             </select>
@@ -124,7 +127,7 @@ export default function Appointments() {
         {appointments === null ? (
           <Skeleton className="h-32 w-full" />
         ) : appointments.length === 0 ? (
-          <EmptyState title="No appointments yet" body={services.length ? 'Choose New appointment to schedule your first visit.' : 'Appointments open when staff publish a service.'} />
+          <EmptyState title="No appointments yet" body={activeServices.length ? 'Choose New appointment to schedule your first visit.' : 'Appointments open when staff publish a service.'} />
         ) : (
           <ul className="flex flex-col gap-2">
             {appointments.map((a) => (

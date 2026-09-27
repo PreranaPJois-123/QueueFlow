@@ -28,7 +28,11 @@ export default function StaffAppointments() {
     }
   }
 
-  useEffect(() => { load() }, [])
+  useEffect(() => {
+    api.get<StaffAppointment[]>('/api/staff/appointments')
+      .then(({ data }) => { setAppointments(data); setError(null) })
+      .catch((err) => { setError(extractErrorMessage(err)); setAppointments([]) })
+  }, [])
 
   async function act(appointment: StaffAppointment, action: 'check-in' | 'complete' | 'no-show') {
     setPendingId(appointment.id)
