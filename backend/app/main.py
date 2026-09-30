@@ -10,7 +10,7 @@ from app.core.logging_config import logger
 from app.core.rate_limit import rate_limit
 from app.core.database import engine
 from app.core.redis_client import redis_client
-from app.api import auth, services, queues, staff, tickets, appointments, analytics
+from app.api import auth, services, queues, staff, tickets, appointments, analytics, product
 
 app = FastAPI(
     title="QueueFlow API",
@@ -48,6 +48,7 @@ app.include_router(staff.router)
 app.include_router(tickets.router)
 app.include_router(appointments.router)
 app.include_router(analytics.router)
+app.include_router(product.router)
 
 
 @app.get("/api/health")

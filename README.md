@@ -17,13 +17,15 @@ provides fixed-window rate limits. Queue mutations acquire a queue row lock befo
 ticket locks, then commit and publish state. The WebSocket manager supports one
 backend process/instance. Production startup applies Alembic migrations.
 
+See [product behavior](docs/PRODUCT.md) for customer/staff features, appointment rules, historical prediction and live-update recovery.
+
 ## Features and access
 
 - Customer registration/login, active service browsing, joining and cancelling
   waiting tickets, ticket history, queue position and wait estimates.
-- Staff-only service/queue management, calling, serving and skipping tickets,
+- Staff-only service/queue management, calling, starting service, completing and skipping tickets,
   pause/resume, and closing queues once active tickets are resolved.
-- Appointment scheduling/cancellation with active-service and future-time checks.
+- Appointment availability, overlap prevention and cancellation with timezone, active-service and future-time checks.
 - Analytics from stored service records; duration runs from call to completion
   unless an explicit service-start time exists.
 - WebSocket initial snapshot, broadcasts, reconnects and restricted browser origins.
@@ -67,18 +69,18 @@ PostgreSQL locking or migration behavior. `ENV=test` bypasses rate limits, so re
 Redis throttling was verified separately using an actual local HTTP server.
 
 Frontend: `npm ci`, `npm run lint`, and `VITE_API_URL=BACKEND_ORIGIN npm run build`.
-Lint exits successfully with existing React hook/fast-refresh warnings.
+Lint and TypeScript checks are run before publication.
 
 `.github/workflows/ci.yml` adds PostgreSQL/Redis service containers, migration
 upgrade/check/downgrade/re-upgrade, backend tests, frontend checks and Docker image
-builds. That workflow passed on GitHub, including all 61 tests against PostgreSQL
-and both Docker image builds. It contains no deployment credentials.
+builds. Earlier repairs passed that workflow, including PostgreSQL and both Docker builds.
+The current update must pass its own workflow run; see [verification](docs/VERIFICATION.md). It contains no deployment credentials.
 
 ## API and schema
 
 Interactive API documentation is at `/docs` on the backend. Key prefixes are
 `/api/auth`, `/api/services`, `/api/queues`, `/api/tickets`, `/api/staff`,
-`/api/appointments`, `/api/analytics` and `/api/health`.
+`/api/appointments`, `/api/analytics`, `/api/product` and `/api/health`.
 WebSockets subscribe at `/api/queues/{queue_id}/ws`.
 [Schema details](docs/schema.md) describe the seven tables.
 

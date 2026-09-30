@@ -1,198 +1,170 @@
-import { useEffect, useState } from 'react'
-import { Link } from 'react-router-dom'
-import { api, extractErrorMessage } from '../../lib/api'
-import { useAuth } from '../../lib/auth'
-import { AppShell } from '../../components/AppShell'
-import { EmptyState, ErrorState, Skeleton } from '../../components/States'
-import { Button } from '../../components/Button'
-import { TicketStatusBadge } from '../../components/Badge'
-import { useQueueSocket } from '../../lib/useQueueSocket'
-import type { Ticket, TicketDetail, Appointment, Service } from '../../types'
-
-export default function CustomerDashboard() {
-  const { user } = useAuth()
-  const [tickets, setTickets] = useState<Ticket[] | null>(null)
-  const [detail, setDetail] = useState<TicketDetail | null>(null)
-  const [appointments, setAppointments] = useState<Appointment[] | null>(null)
-  const [services, setServices] = useState<Service[] | null>(null)
-  const [error, setError] = useState<string | null>(null)
-
-  const activeTicket = tickets?.find((t) => t.status === 'WAITING' || t.status === 'CALLED' || t.status === 'SERVING')
-  const { state: liveQueue } = useQueueSocket(activeTicket?.queue_id ?? null)
-
-  async function loadTickets() {
+import { useClock } from "../../lib/useClock";
+import { Link } from "react-router-dom";
+import { AppShell } from "../../components/AppShell";
+import {
+  Card,
+  Heading,
+  Metric,
+  ResourceState,
+  TicketHistory,
+} from "../../components/Product";
+import { activeStatus, dateTime } from "../../lib/format";
+import { EmptyState } from "../../components/States";
+import { TicketCard } from "../../components/TicketCard";
+import { Button } from "../../components/Button";
+import { useResource } from "../../lib/useResource";
+import { useQueueSocket } from "../../lib/useQueueSocket";
+import { useAuth } from "../../lib/auth";
+import { api, extractErrorMessage } from "../../lib/api";
+import { useToast } from "../../components/Toast";
+import type { CustomerData, TicketDetail } from "../../types";
+export default function Dashboard() {
+  const now = useClock();
+  const { user } = useAuth();
+  const mine = useResource<CustomerData>("/api/product/mine");
+  const ticket = mine.data?.tickets.find((t) => activeStatus(t.status));
+  const socket = useQueueSocket(ticket?.queue_id ?? null);
+  const detail = useResource<TicketDetail>(
+    ticket ? `/api/tickets/${ticket.id}` : null,
+    10000,
+    socket.state,
+  );
+  const upcoming =
+    mine.data?.appointments.filter(
+      (a) =>
+        ["SCHEDULED", "CHECKED_IN"].includes(a.status) &&
+        new Date(a.scheduled_time).getTime() >= now,
+    ) ?? [];
+  const { push } = useToast();
+  async function read(id: string) {
     try {
-      const { data } = await api.get<Ticket[]>('/api/tickets/mine')
-      setTickets(data)
-    } catch (err) {
-      setError(extractErrorMessage(err))
+      await api.post(`/api/product/notifications/${id}/read`);
+      mine.refresh();
+    } catch (e) {
+      push(extractErrorMessage(e), "error");
     }
   }
-
-  async function loadAppointments() {
-    try {
-      const { data } = await api.get<Appointment[]>('/api/appointments')
-      setAppointments(data.filter((a) => a.status === 'SCHEDULED').slice(0, 3))
-    } catch (err) {
-      setError(extractErrorMessage(err))
-      setAppointments([])
-    }
-  }
-
-  async function loadServices() {
-    try {
-      const { data } = await api.get<Service[]>('/api/services')
-      setServices(data)
-    } catch (err) {
-      setError(extractErrorMessage(err))
-      setServices([])
-    }
-  }
-
-  useEffect(() => {
-    loadTickets()
-    loadAppointments()
-    loadServices()
-  }, [])
-
-  useEffect(() => {
-    if (!activeTicket) {
-      setDetail(null)
-      return
-    }
-    api.get<TicketDetail>(`/api/tickets/${activeTicket.id}`).then((r) => {
-      setDetail(r.data)
-      setTickets((previous) => previous?.map((ticket) => ticket.id === r.data.ticket.id ? r.data.ticket : ticket) ?? null)
-    }).catch((err) => setError(extractErrorMessage(err)))
-  }, [activeTicket?.id, liveQueue])
-
   return (
     <AppShell variant="customer">
-      <h1 className="text-xl font-semibold text-ink-900">Welcome back{user ? `, ${user.full_name.split(' ')[0]}` : ''}</h1>
-      <p className="mt-1 text-sm text-ink-500">Here's where things stand right now.</p>
-
-      {error && <div className="mt-6"><ErrorState message={error} /></div>}
-
-      <div className="mt-6 grid gap-6 lg:grid-cols-3">
-        <section className="lg:col-span-2">
-          {tickets === null ? (
-            <Skeleton className="h-48 w-full" />
-          ) : activeTicket && !detail ? (
-            <Skeleton className="h-48 w-full" />
-          ) : activeTicket && detail ? (
-            <div className="rounded-2xl border border-ink-100 bg-white p-6">
-              <div className="flex items-start justify-between">
-                <div>
-                  <p className="text-xs font-medium uppercase tracking-wide text-ink-400">Your ticket</p>
-                  <p className="token-display mt-1 text-5xl font-bold text-ink-900">{activeTicket.token_label}</p>
-                </div>
-                <TicketStatusBadge status={activeTicket.status} />
-              </div>
-
-              {detail.smart_alert && (
-                <div className="mt-4 rounded-lg bg-amber-100 px-4 py-3 text-sm font-medium text-amber-600">
-                  Your turn is approaching. Please be ready.
-                </div>
-              )}
-
-              <div className="mt-6 grid grid-cols-3 gap-4 border-t border-ink-100 pt-5 text-sm">
-                <div>
-                  <p className="text-ink-400">Current token</p>
-                  <p className="mt-1 font-semibold text-ink-900">{detail.current_serving_label ?? '—'}</p>
-                </div>
-                <div>
-                  <p className="text-ink-400">People ahead</p>
-                  <p className="mt-1 font-semibold text-ink-900">{detail.people_ahead}</p>
-                </div>
-                <div>
-                  <p className="text-ink-400">Estimated wait</p>
-                  <p className="mt-1 font-semibold text-signal-700">~{detail.estimated_wait_minutes} min</p>
-                </div>
-              </div>
-
-              <div className="mt-5">
-                <div className="h-2 w-full overflow-hidden rounded-full bg-ink-100">
-                  <div
-                    className="h-full rounded-full bg-signal-500 transition-all"
-                    style={{
-                      width: `${Math.max(6, 100 - Math.min(detail.people_ahead, 10) * 10)}%`,
-                    }}
-                  />
-                </div>
-                <p className="mt-2 text-xs text-ink-400">Progress toward your turn</p>
-              </div>
-
-              <Link to="/my-ticket" className="mt-5 inline-block text-sm font-medium text-signal-700 hover:underline">
-                View full ticket →
-              </Link>
-            </div>
-          ) : (
-            <EmptyState
-              title="No active ticket"
-              body={services?.length === 0 ? 'No services are open yet. Staff will publish services here when they are ready.' : 'Join a queue to get a token and start tracking your wait.'}
-              action={
-                <Link to="/services">
-                  <Button size="sm">Browse services</Button>
-                </Link>
+      <Heading
+        title={`Welcome back, ${user?.full_name.split(" ")[0] ?? ""}`}
+        body="Less time waiting. More time for everything else."
+      />
+      <div className="my-6 flex flex-wrap gap-3">
+        {[
+          ["/join-queue", "Join queue"],
+          ["/appointments", "Book appointment"],
+          ["/my-ticket", "View ticket"],
+          ["/services", "View services"],
+        ].map(([url, label]) => (
+          <Link key={url} className="action-link" to={url}>
+            {label} →
+          </Link>
+        ))}
+      </div>
+      <ResourceState {...mine} />
+      {mine.data && (
+        <>
+          <div className="mb-6 grid gap-4 sm:grid-cols-3">
+            <Metric
+              label="Active tickets"
+              value={
+                mine.data.tickets.filter((t) => activeStatus(t.status)).length
               }
             />
-          )}
-        </section>
-
-        <section className="rounded-2xl border border-ink-100 bg-white p-6">
-          <p className="text-sm font-semibold text-ink-900">Upcoming appointments</p>
-          {appointments === null ? (
-            <Skeleton className="mt-3 h-20 w-full" />
-          ) : appointments.length === 0 ? (
-            <p className="mt-3 text-sm text-ink-400">No upcoming appointments.</p>
-          ) : (
-            <ul className="mt-3 flex flex-col gap-3">
-              {appointments.map((a) => (
-                <li key={a.id} className="rounded-lg border border-ink-100 px-3 py-2 text-sm">
-                  <p className="font-medium text-ink-900">{services?.find((service) => service.id === a.service_id)?.name ?? 'Appointment'}</p>
-                  <p className="font-medium text-ink-800">{new Date(a.scheduled_time).toLocaleString()}</p>
-                  {a.notes && <p className="text-ink-400">{a.notes}</p>}
-                </li>
-              ))}
-            </ul>
-          )}
-          {services !== null && services.length === 0 && <p className="mt-4 text-sm text-ink-500">Appointments become available when staff publish a service.</p>}
-          <Link to="/appointments" className="mt-4 inline-block text-sm font-medium text-signal-700 hover:underline">
-            Manage appointments →
-          </Link>
-        </section>
-      </div>
-      <section className="mt-8 rounded-2xl border border-ink-100 bg-white p-6">
-        <div className="flex items-center justify-between gap-4">
-          <div>
-            <h2 className="text-sm font-semibold text-ink-900">Available services</h2>
-            <p className="mt-1 text-sm text-ink-500">Find an open queue or plan a visit.</p>
+            <Metric
+              label="Completed visits"
+              value={
+                mine.data.tickets.filter((t) => t.status === "SERVED").length
+              }
+            />
+            <Metric label="Upcoming appointments" value={upcoming.length} />
           </div>
-          <Link to="/services" className="text-sm font-medium text-signal-700 hover:underline">View all →</Link>
-        </div>
-        {services === null ? <Skeleton className="mt-4 h-16 w-full" /> : services.length === 0 ? (
-          <p className="mt-4 text-sm text-ink-500">No services have been published yet.</p>
-        ) : (
-          <ul className="mt-4 grid gap-3 sm:grid-cols-2">
-            {services.slice(0, 4).map((service) => (
-              <li key={service.id} className="rounded-lg border border-ink-100 px-4 py-3">
-                <p className="font-medium text-ink-900">{service.name}</p>
-                {service.description && <p className="mt-1 text-sm text-ink-500">{service.description}</p>}
-              </li>
-            ))}
-          </ul>
-        )}
-      </section>
-      {tickets && tickets.length > 0 && <section className="mt-8">
-        <h2 className="text-sm font-semibold text-ink-900">Recent tickets</h2>
-        <ul className="mt-3 space-y-2">{tickets.slice(0, 5).map((ticket) => (
-          <li key={ticket.id} className="flex items-center justify-between gap-3 rounded-lg border border-ink-100 bg-white px-4 py-3 text-sm">
-            <span className="font-medium text-ink-900">{ticket.token_label}</span>
-            <span className="text-ink-500">{new Date(ticket.created_at).toLocaleString()}</span>
-            <TicketStatusBadge status={ticket.status} />
-          </li>
-        ))}</ul>
-      </section>}
+          <div className="grid gap-6 lg:grid-cols-3">
+            <div className="lg:col-span-2">
+              <ResourceState {...detail} />
+              {detail.data ? (
+                <TicketCard detail={detail.data} connection={socket.status} />
+              ) : (
+                !ticket && (
+                  <EmptyState
+                    title="Your next visit starts here"
+                    body="Choose a service and join a live queue."
+                    action={
+                      <Link className="action-link" to="/services">
+                        Find a service →
+                      </Link>
+                    }
+                  />
+                )
+              )}
+            </div>
+            <Card title="Upcoming appointments">
+              {upcoming.length ? (
+                upcoming.slice(0, 3).map((a) => (
+                  <div key={a.id} className="mb-4 border-b border-ink-100 pb-4">
+                    <p className="text-sm font-semibold">{a.service_name}</p>
+                    <p className="mt-2 text-xs text-ink-500">
+                      {dateTime(a.scheduled_time)}
+                    </p>
+                    <p className="mt-2 text-xs text-signal-700">
+                      {a.status.replaceAll("_", " ")}
+                    </p>
+                  </div>
+                ))
+              ) : (
+                <p className="text-sm text-ink-500">
+                  No upcoming appointments. Plan your next visit when it suits
+                  you.
+                </p>
+              )}
+              <Link
+                to="/appointments"
+                className="mt-4 inline-block text-sm font-semibold text-signal-700"
+              >
+                Manage appointments →
+              </Link>
+            </Card>
+          </div>
+          <Card title="Notifications" className="mt-6">
+            {mine.data.notifications.length ? (
+              mine.data.notifications.slice(0, 5).map((n) => (
+                <div
+                  key={n.id}
+                  className="flex items-start justify-between gap-3 border-b border-ink-50 py-3"
+                >
+                  <div>
+                    <p
+                      className={`text-sm ${n.is_read ? "text-ink-500" : "font-semibold"}`}
+                    >
+                      {n.message}
+                    </p>
+                    <p className="mt-1 text-xs text-ink-500">
+                      {dateTime(n.created_at)}
+                    </p>
+                  </div>
+                  {!n.is_read && (
+                    <Button
+                      size="sm"
+                      variant="ghost"
+                      onClick={() => read(n.id)}
+                    >
+                      Mark read
+                    </Button>
+                  )}
+                </div>
+              ))
+            ) : (
+              <p className="text-sm text-ink-500">
+                Updates from your service desk will appear here.
+              </p>
+            )}
+          </Card>
+          <Card title="Recent activity" className="mt-6">
+            <TicketHistory tickets={mine.data.tickets.slice(0, 5)} />
+          </Card>
+        </>
+      )}
     </AppShell>
-  )
+  );
 }

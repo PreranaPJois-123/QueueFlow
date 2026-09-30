@@ -112,3 +112,10 @@ async def skip_ticket(ticket_id: str, db: Session = Depends(get_db), _: User = D
     ticket = await run_in_threadpool(queue_service.skip_ticket, db, ticket_id)
     await _broadcast(db, ticket.queue_id)
     return ticket
+
+
+@router.post("/tickets/{ticket_id}/start", response_model=TicketOut)
+async def start_ticket(ticket_id: str, db: Session = Depends(get_db), _: User = Depends(require_staff)):
+    ticket = await run_in_threadpool(queue_service.start_serving, db, ticket_id)
+    await _broadcast(db, ticket.queue_id)
+    return ticket

@@ -1,80 +1,94 @@
-import { useEffect, useState } from 'react'
-import { api, extractErrorMessage } from '../../lib/api'
-import { AppShell } from '../../components/AppShell'
-import { EmptyState, ErrorState, Skeleton } from '../../components/States'
-import { Button } from '../../components/Button'
-import { useToast } from '../../components/Toast'
-import type { Service } from '../../types'
+import { useEffect, useState } from "react";
+import { api, extractErrorMessage } from "../../lib/api";
+import { AppShell } from "../../components/AppShell";
+import { EmptyState, ErrorState, Skeleton } from "../../components/States";
+import { Button } from "../../components/Button";
+import { useToast } from "../../components/Toast";
+import { Account } from "../../components/Account";
+import { Card } from "../../components/Product";
+
+import { API_BASE } from "../../lib/api";
+import type { Service } from "../../types";
 
 export default function StaffSettings() {
-  const [services, setServices] = useState<Service[] | null>(null)
-  const [error, setError] = useState<string | null>(null)
-  const [showForm, setShowForm] = useState(false)
-  const [name, setName] = useState('')
-  const [description, setDescription] = useState('')
-  const [editingId, setEditingId] = useState<string | null>(null)
-  const [submitting, setSubmitting] = useState(false)
-  const { push } = useToast()
+  const [services, setServices] = useState<Service[] | null>(null);
+  const [error, setError] = useState<string | null>(null);
+  const [showForm, setShowForm] = useState(false);
+  const [name, setName] = useState("");
+  const [description, setDescription] = useState("");
+  const [editingId, setEditingId] = useState<string | null>(null);
+  const [submitting, setSubmitting] = useState(false);
+  const { push } = useToast();
 
   async function load() {
     try {
-      const { data } = await api.get<Service[]>('/api/services', { params: { active_only: false } })
-      setServices(data)
-      setError(null)
+      const { data } = await api.get<Service[]>("/api/services", {
+        params: { active_only: false },
+      });
+      setServices(data);
+      setError(null);
     } catch (err) {
-      setError(extractErrorMessage(err))
-      setServices([])
+      setError(extractErrorMessage(err));
+      setServices([]);
     }
   }
 
   useEffect(() => {
-    load()
-  }, [])
+    void Promise.resolve().then(load);
+  }, []);
 
   async function handleCreate(e: React.FormEvent) {
-    e.preventDefault()
-    setSubmitting(true)
+    e.preventDefault();
+    setSubmitting(true);
     try {
       if (editingId) {
-        await api.patch(`/api/services/${editingId}`, { name, description })
+        await api.patch(`/api/services/${editingId}`, { name, description });
       } else {
-        await api.post('/api/services', { name, description: description || undefined })
+        await api.post("/api/services", {
+          name,
+          description: description || undefined,
+        });
       }
-      push(editingId ? 'Service updated' : 'Service created', 'success')
-      setName('')
-      setDescription('')
-      setShowForm(false)
-      setEditingId(null)
-      load()
+      push(editingId ? "Service updated" : "Service created", "success");
+      setName("");
+      setDescription("");
+      setShowForm(false);
+      setEditingId(null);
+      load();
     } catch (err) {
-      push(extractErrorMessage(err), 'error')
+      push(extractErrorMessage(err), "error");
     } finally {
-      setSubmitting(false)
+      setSubmitting(false);
     }
   }
 
   async function toggleActive(service: Service) {
     try {
-      await api.patch(`/api/services/${service.id}`, { is_active: !service.is_active })
-      push(service.is_active ? 'Service deactivated' : 'Service activated', 'success')
-      load()
+      await api.patch(`/api/services/${service.id}`, {
+        is_active: !service.is_active,
+      });
+      push(
+        service.is_active ? "Service deactivated" : "Service activated",
+        "success",
+      );
+      load();
     } catch (err) {
-      push(extractErrorMessage(err), 'error')
+      push(extractErrorMessage(err), "error");
     }
   }
 
   function startEdit(service: Service) {
-    setEditingId(service.id)
-    setName(service.name)
-    setDescription(service.description ?? '')
-    setShowForm(true)
+    setEditingId(service.id);
+    setName(service.name);
+    setDescription(service.description ?? "");
+    setShowForm(true);
   }
 
   function closeForm() {
-    setShowForm(false)
-    setEditingId(null)
-    setName('')
-    setDescription('')
+    setShowForm(false);
+    setEditingId(null);
+    setName("");
+    setDescription("");
   }
 
   return (
@@ -82,20 +96,36 @@ export default function StaffSettings() {
       <div className="flex items-center justify-between">
         <div>
           <h1 className="text-xl font-semibold text-ink-900">Settings</h1>
-          <p className="mt-1 text-sm text-ink-500">Manage the services customers can join a queue for.</p>
+          <p className="mt-1 text-sm text-ink-500">
+            Manage the services customers can join a queue for.
+          </p>
         </div>
-        <Button size="sm" onClick={() => showForm ? closeForm() : setShowForm(true)}>
-          {showForm ? 'Close' : 'New service'}
+        <Button
+          size="sm"
+          onClick={() => (showForm ? closeForm() : setShowForm(true))}
+        >
+          {showForm ? "Close" : "New service"}
         </Button>
       </div>
 
-      {error && <div className="mt-6"><ErrorState message={error} /></div>}
+      {error && (
+        <div className="mt-6">
+          <ErrorState message={error} />
+        </div>
+      )}
 
       {showForm && (
-        <form onSubmit={handleCreate} className="mt-6 flex flex-col gap-4 rounded-2xl border border-ink-100 bg-white p-6 sm:max-w-md">
-          <h2 className="text-sm font-semibold text-ink-900">{editingId ? 'Edit service' : 'New service'}</h2>
+        <form
+          onSubmit={handleCreate}
+          className="mt-6 flex flex-col gap-4 rounded-2xl border border-ink-100 bg-white p-6 sm:max-w-md"
+        >
+          <h2 className="text-sm font-semibold text-ink-900">
+            {editingId ? "Edit service" : "New service"}
+          </h2>
           <div>
-            <label className="mb-1.5 block text-sm font-medium text-ink-700">Service name</label>
+            <label className="mb-1.5 block text-sm font-medium text-ink-700">
+              Service name
+            </label>
             <input
               required
               value={name}
@@ -105,7 +135,9 @@ export default function StaffSettings() {
             />
           </div>
           <div>
-            <label className="mb-1.5 block text-sm font-medium text-ink-700">Description (optional)</label>
+            <label className="mb-1.5 block text-sm font-medium text-ink-700">
+              Description (optional)
+            </label>
             <textarea
               value={description}
               onChange={(e) => setDescription(e.target.value)}
@@ -113,7 +145,9 @@ export default function StaffSettings() {
               className="w-full rounded-lg border border-ink-200 px-3 py-2.5 text-sm outline-none focus:border-signal-500"
             />
           </div>
-          <Button type="submit" loading={submitting} className="w-full">{editingId ? 'Save changes' : 'Create service'}</Button>
+          <Button type="submit" loading={submitting} className="w-full">
+            {editingId ? "Save changes" : "Create service"}
+          </Button>
         </form>
       )}
 
@@ -121,19 +155,37 @@ export default function StaffSettings() {
         {services === null ? (
           <Skeleton className="h-40 w-full" />
         ) : services.length === 0 ? (
-          <EmptyState title="No services yet" body="Create a real service to unlock queues and appointments for customers." />
+          <EmptyState
+            title="No services yet"
+            body="Create a real service to unlock queues and appointments for customers."
+          />
         ) : (
           <ul className="flex flex-col gap-2">
             {services.map((s) => (
-              <li key={s.id} className="flex items-center justify-between rounded-lg border border-ink-100 bg-white px-4 py-3">
+              <li
+                key={s.id}
+                className="flex items-center justify-between rounded-lg border border-ink-100 bg-white px-4 py-3"
+              >
                 <div>
                   <p className="text-sm font-medium text-ink-800">{s.name}</p>
-                  {s.description && <p className="text-sm text-ink-400">{s.description}</p>}
+                  {s.description && (
+                    <p className="text-sm text-ink-400">{s.description}</p>
+                  )}
                 </div>
                 <div className="flex flex-wrap gap-2">
-                  <Button variant="ghost" size="sm" onClick={() => startEdit(s)}>Edit</Button>
-                  <Button variant="secondary" size="sm" onClick={() => toggleActive(s)}>
-                    {s.is_active ? 'Deactivate' : 'Activate'}
+                  <Button
+                    variant="ghost"
+                    size="sm"
+                    onClick={() => startEdit(s)}
+                  >
+                    Edit
+                  </Button>
+                  <Button
+                    variant="secondary"
+                    size="sm"
+                    onClick={() => toggleActive(s)}
+                  >
+                    {s.is_active ? "Deactivate" : "Activate"}
                   </Button>
                 </div>
               </li>
@@ -141,6 +193,37 @@ export default function StaffSettings() {
           </ul>
         )}
       </div>
+      <div className="mt-8 grid gap-6 lg:grid-cols-2">
+        <Account />
+        <Card title="System information">
+          <dl className="space-y-4 text-sm">
+            <div>
+              <dt className="text-xs text-ink-500">API endpoint</dt>
+              <dd className="mt-1 break-all">{API_BASE}</dd>
+            </div>
+            <div>
+              <dt className="text-xs text-ink-500">Appointment reservations</dt>
+              <dd className="mt-1">
+                30 minutes · personal and service conflict protection
+              </dd>
+            </div>
+            <div>
+              <dt className="text-xs text-ink-500">Wait prediction</dt>
+              <dd className="mt-1">
+                Historical nearest-neighbour model after 20 completed durations;
+                calculated fallback before then.
+              </dd>
+            </div>
+            <div>
+              <dt className="text-xs text-ink-500">Service permissions</dt>
+              <dd className="mt-1">
+                Staff and administrators can configure services and queues.
+                Account roles require administrator provisioning.
+              </dd>
+            </div>
+          </dl>
+        </Card>
+      </div>
     </AppShell>
-  )
+  );
 }

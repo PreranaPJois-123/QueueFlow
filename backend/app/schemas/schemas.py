@@ -6,9 +6,21 @@ from pydantic import BaseModel, EmailStr, Field, ConfigDict, field_validator
 from app.models.models import UserRole, QueueStatus, TicketStatus, AppointmentStatus, NotificationType
 
 
+class NamedInput(BaseModel):
+    @field_validator("full_name", "name", check_fields=False)
+    @classmethod
+    def trim_name(cls, value):
+        if value is None:
+            return value
+        value = value.strip()
+        if not value:
+            raise ValueError("Name cannot be blank")
+        return value
+
+
 # ----------------------------- Auth -----------------------------
 
-class UserRegister(BaseModel):
+class UserRegister(NamedInput):
     email: EmailStr
     password: str = Field(min_length=8, max_length=72)  # 72 bytes is bcrypt's hard limit
     full_name: str = Field(min_length=1, max_length=255)
@@ -44,14 +56,14 @@ class UserOut(BaseModel):
 
 # ----------------------------- Service -----------------------------
 
-class ServiceCreate(BaseModel):
+class ServiceCreate(NamedInput):
     name: str = Field(min_length=1, max_length=255)
-    description: Optional[str] = None
+    description: Optional[str] = Field(default=None, max_length=5000)
 
 
-class ServiceUpdate(BaseModel):
+class ServiceUpdate(NamedInput):
     name: Optional[str] = Field(default=None, min_length=1, max_length=255)
-    description: Optional[str] = None
+    description: Optional[str] = Field(default=None, max_length=5000)
     is_active: Optional[bool] = None
 
 
@@ -66,7 +78,7 @@ class ServiceOut(BaseModel):
 
 # ----------------------------- Queue -----------------------------
 
-class QueueCreate(BaseModel):
+class QueueCreate(NamedInput):
     service_id: str
     name: str = Field(min_length=1, max_length=255)
 
@@ -116,6 +128,11 @@ class TicketDetailOut(BaseModel):
     current_serving_label: Optional[str] = None
     queue_status: QueueStatus
     smart_alert: bool = False
+    queue_name: str = ""
+    service_name: str = ""
+    prediction_source: str = "calculated_default"
+    prediction_samples: int = 0
+    estimated_service_minutes: float = 5
 
 
 # ----------------------------- Appointment -----------------------------
@@ -123,7 +140,7 @@ class TicketDetailOut(BaseModel):
 class AppointmentCreate(BaseModel):
     service_id: str
     scheduled_time: datetime
-    notes: Optional[str] = None
+    notes: Optional[str] = Field(default=None, max_length=2000)
 
 
 class AppointmentOut(BaseModel):
@@ -168,3 +185,15 @@ class NotificationOut(BaseModel):
 
 class ErrorResponse(BaseModel):
     detail: str
+
+
+class ProfileUpdate(BaseModel):
+    full_name: str = Field(min_length=1, max_length=255)
+
+    @field_validator("full_name")
+    @classmethod
+    def clean_name(cls, value):
+        value = value.strip()
+        if not value:
+            raise ValueError("Enter your name")
+        return value

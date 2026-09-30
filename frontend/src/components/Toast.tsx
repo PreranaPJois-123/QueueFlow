@@ -1,35 +1,41 @@
-import { createContext, useCallback, useContext, useState, type ReactNode } from 'react'
+import {
+  createContext,
+  useCallback,
+  useContext,
+  useState,
+  type ReactNode,
+} from "react";
 
 interface Toast {
-  id: number
-  message: string
-  tone: 'success' | 'error' | 'info'
+  id: number;
+  message: string;
+  tone: "success" | "error" | "info";
 }
 
 interface ToastContextValue {
-  push: (message: string, tone?: Toast['tone']) => void
+  push: (message: string, tone?: Toast["tone"]) => void;
 }
 
-const ToastContext = createContext<ToastContextValue | null>(null)
+const ToastContext = createContext<ToastContextValue | null>(null);
 
-let nextId = 1
+let nextId = 1;
 
 export function ToastProvider({ children }: { children: ReactNode }) {
-  const [toasts, setToasts] = useState<Toast[]>([])
+  const [toasts, setToasts] = useState<Toast[]>([]);
 
-  const push = useCallback((message: string, tone: Toast['tone'] = 'info') => {
-    const id = nextId++
-    setToasts((prev) => [...prev, { id, message, tone }])
+  const push = useCallback((message: string, tone: Toast["tone"] = "info") => {
+    const id = nextId++;
+    setToasts((prev) => [...prev, { id, message, tone }]);
     setTimeout(() => {
-      setToasts((prev) => prev.filter((t) => t.id !== id))
-    }, 4000)
-  }, [])
+      setToasts((prev) => prev.filter((t) => t.id !== id));
+    }, 4000);
+  }, []);
 
-  const toneStyles: Record<Toast['tone'], string> = {
-    success: 'bg-signal-700 text-white',
-    error: 'bg-rose-600 text-white',
-    info: 'bg-ink-900 text-white',
-  }
+  const toneStyles: Record<Toast["tone"], string> = {
+    success: "bg-signal-700 text-white",
+    error: "bg-rose-600 text-white",
+    info: "bg-ink-900 text-white",
+  };
 
   return (
     <ToastContext.Provider value={{ push }}>
@@ -46,11 +52,12 @@ export function ToastProvider({ children }: { children: ReactNode }) {
         ))}
       </div>
     </ToastContext.Provider>
-  )
+  );
 }
 
+// oxlint-disable-next-line react/only-export-components -- Context provider and hook share one public API.
 export function useToast() {
-  const ctx = useContext(ToastContext)
-  if (!ctx) throw new Error('useToast must be used within ToastProvider')
-  return ctx
+  const ctx = useContext(ToastContext);
+  if (!ctx) throw new Error("useToast must be used within ToastProvider");
+  return ctx;
 }

@@ -1,198 +1,259 @@
-import { useEffect, useState } from 'react'
-import { useParams } from 'react-router-dom'
-import { api, extractErrorMessage } from '../../lib/api'
-import { AppShell } from '../../components/AppShell'
-import { ErrorState, Skeleton } from '../../components/States'
-import { Button } from '../../components/Button'
-import { QueueStatusBadge } from '../../components/Badge'
-import { useToast } from '../../components/Toast'
-import { useQueueSocket } from '../../lib/useQueueSocket'
-import type { Queue, QueueState, Ticket } from '../../types'
-
-type ActionKey = 'next' | 'serve' | 'skip' | 'pause' | 'resume' | 'close' | null
-
-export default function StaffQueueDetail() {
-  const { id } = useParams<{ id: string }>()
-  const [queue, setQueue] = useState<Queue | null>(null)
-  const [state, setState] = useState<QueueState | null>(null)
-  const [calledTicket, setCalledTicket] = useState<Ticket | null>(null)
-  const [error, setError] = useState<string | null>(null)
-  const [pending, setPending] = useState<ActionKey>(null)
-  const { push } = useToast()
-  const { state: liveState, connected } = useQueueSocket(id ?? null)
-
-  async function loadQueue() {
-    if (!id) return
+import { useState } from "react";
+import { Link, useParams } from "react-router-dom";
+import { AppShell } from "../../components/AppShell";
+import { Button } from "../../components/Button";
+import { ConfirmDialog } from "../../components/ConfirmDialog";
+import { TicketStatusBadge, QueueStatusBadge } from "../../components/Badge";
+import {
+  Heading,
+  Card,
+  ResourceState,
+  Connection,
+  Metric,
+} from "../../components/Product";
+import { dateTime } from "../../lib/format";
+import { EmptyState } from "../../components/States";
+import { useResource } from "../../lib/useResource";
+import { useQueueSocket } from "../../lib/useQueueSocket";
+import { api, extractErrorMessage } from "../../lib/api";
+import { useToast } from "../../components/Toast";
+import type { QueueSummary, OperatingTicket } from "../../types";
+export default function QueueDetail() {
+  const { id } = useParams();
+  const socket = useQueueSocket(id ?? null);
+  const summaries = useResource<QueueSummary[]>(
+    "/api/product/queues",
+    10000,
+    socket.state,
+  );
+  const tickets = useResource<OperatingTicket[]>(
+    id ? `/api/product/queues/${id}/tickets` : null,
+    10000,
+    socket.state,
+  );
+  const queue = summaries.data?.find((q) => q.id === id);
+  const current = tickets.data?.find((t) =>
+    ["CALLED", "SERVING"].includes(t.status),
+  );
+  const waiting = tickets.data?.filter((t) => t.status === "WAITING") ?? [];
+  const [pending, setPending] = useState(false);
+  const [confirm, setConfirm] = useState<{
+    path: string;
+    title: string;
+    body: string;
+  } | null>(null);
+  const { push } = useToast();
+  async function act(path: string) {
+    setPending(true);
     try {
-      const { data } = await api.get<Queue>(`/api/queues/${id}`)
-      setQueue(data)
-    } catch (err) {
-      setError(extractErrorMessage(err))
-    }
-  }
-
-  async function loadState() {
-    if (!id) return
-    try {
-      const { data } = await api.get<QueueState>(`/api/staff/queues/${id}/state`)
-      setState(data)
-      await loadCalledTicket(data)
-    } catch (err) {
-      setError(extractErrorMessage(err))
-    }
-  }
-
-  async function loadCalledTicket(stateData: QueueState | null) {
-    if (!stateData?.now_serving_ticket_id) {
-      setCalledTicket(null)
-      return
-    }
-    try {
-      const { data } = await api.get<{ ticket: Ticket }>(`/api/tickets/${stateData.now_serving_ticket_id}`)
-      setCalledTicket(data.ticket)
-    } catch {
-      setCalledTicket(null)
-    }
-  }
-
-  useEffect(() => {
-    loadQueue()
-    loadState()
-  }, [id])
-
-  useEffect(() => {
-    if (liveState) {
-      setState(liveState)
-      setQueue((prev) => (prev ? { ...prev, status: liveState.status } : prev))
-      loadCalledTicket(liveState)
-    }
-  }, [liveState])
-
-  async function runAction(key: ActionKey, fn: () => Promise<unknown>, successMsg: string) {
-    setPending(key)
-    try {
-      await fn()
-      push(successMsg, 'success')
-      await loadQueue()
-      await loadState()
-    } catch (err) {
-      push(extractErrorMessage(err), 'error')
+      await api.post(path);
+      push("Queue updated", "success");
+      setConfirm(null);
+      summaries.refresh();
+      tickets.refresh();
+    } catch (e) {
+      push(extractErrorMessage(e), "error");
+      summaries.refresh();
+      tickets.refresh();
     } finally {
-      setPending(null)
+      setPending(false);
     }
   }
-
-  if (!queue || !state) {
-    return (
-      <AppShell variant="staff">
-        {error ? <ErrorState message={error} /> : <Skeleton className="h-80 w-full" />}
-      </AppShell>
-    )
-  }
-
-  const hasCalledTicket = Boolean(state.now_serving_ticket_id)
-
+  const base = `/api/staff/queues/${id}`;
   return (
     <AppShell variant="staff">
-      <div className="flex items-center justify-between">
-        <div>
-          <h1 className="text-xl font-semibold text-ink-900">{queue.name}</h1>
-          <div className="mt-1 flex items-center gap-2">
+      <Link
+        to="/staff/queues"
+        className="mb-4 inline-block text-sm text-signal-700"
+      >
+        ← All queues
+      </Link>
+      <Heading
+        title={queue?.name ?? "Queue control"}
+        body={queue?.service_name}
+        action={<Connection status={socket.status} />}
+      />
+      <ResourceState {...summaries} />
+      <ResourceState {...tickets} />
+      {summaries.data && !queue && (
+        <EmptyState
+          title="Queue not found"
+          body="Return to the queues list to choose another desk."
+        />
+      )}
+      {queue && (
+        <>
+          <div className="my-6 flex flex-wrap items-center gap-3">
             <QueueStatusBadge status={queue.status} />
-            <span className={`text-xs font-medium ${connected ? 'text-signal-600' : 'text-ink-400'}`}>
-              {connected ? '● Live' : 'Connecting…'}
-            </span>
-          </div>
-        </div>
-        <div className="flex flex-wrap gap-2">
-          {queue.status === 'OPEN' && (
-            <Button variant="secondary" size="sm" loading={pending === 'pause'}
-              onClick={() => runAction('pause', () => api.post(`/api/staff/queues/${id}/pause`), 'Queue paused')}>
-              Pause queue
-            </Button>
-          )}
-          {queue.status === 'PAUSED' && (
-            <Button variant="secondary" size="sm" loading={pending === 'resume'}
-              onClick={() => runAction('resume', () => api.post(`/api/staff/queues/${id}/resume`), 'Queue resumed')}>
-              Resume queue
-            </Button>
-          )}
-          {queue.status !== 'CLOSED' && (
-            <Button variant="danger" size="sm" loading={pending === 'close'}
-              onClick={() => runAction('close', () => api.post(`/api/staff/queues/${id}/close`), 'Queue closed')}>
-              Close queue
-            </Button>
-          )}
-        </div>
-      </div>
-
-      {error && <div className="mt-6"><ErrorState message={error} /></div>}
-
-      <div className="mt-6 grid gap-6 lg:grid-cols-3">
-        <div className="rounded-2xl border border-ink-100 bg-white p-6 lg:col-span-2">
-          <p className="text-xs font-medium uppercase tracking-wide text-ink-400">Now serving</p>
-          <p className="token-display mt-1 text-5xl font-bold text-ink-900">
-            {state.current_serving_label ?? '—'}
-          </p>
-
-          <div className="mt-6 flex flex-wrap gap-3">
-            <Button
-              disabled={queue.status !== 'OPEN' || hasCalledTicket}
-              loading={pending === 'next'}
-              onClick={() => runAction('next', () => api.post(`/api/staff/queues/${id}/next`), 'Called next customer')}
-            >
-              Call next
-            </Button>
-            {hasCalledTicket && calledTicket && (
-              <>
-                <Button
-                  variant="secondary"
-                  loading={pending === 'serve'}
-                  onClick={() => runAction('serve', () => api.post(`/api/staff/tickets/${calledTicket.id}/serve`), 'Marked as served')}
-                >
-                  Mark served
-                </Button>
-                <Button
-                  variant="danger"
-                  loading={pending === 'skip'}
-                  onClick={() => runAction('skip', () => api.post(`/api/staff/tickets/${calledTicket.id}/skip`), 'Ticket skipped')}
-                >
-                  Skip
-                </Button>
-              </>
+            {queue.status === "OPEN" && (
+              <Button
+                disabled={pending}
+                variant="secondary"
+                onClick={() =>
+                  setConfirm({
+                    path: `${base}/pause`,
+                    title: "Pause queue?",
+                    body: "New customers cannot join until the queue resumes.",
+                  })
+                }
+              >
+                Pause
+              </Button>
+            )}
+            {queue.status === "PAUSED" && (
+              <Button
+                disabled={pending}
+                variant="secondary"
+                onClick={() => act(`${base}/resume`)}
+              >
+                Resume
+              </Button>
+            )}
+            {queue.status !== "CLOSED" && (
+              <Button
+                disabled={pending}
+                variant="danger"
+                onClick={() =>
+                  setConfirm({
+                    path: `${base}/close`,
+                    title: "Close queue?",
+                    body: "Closing is permanent for this queue. All active tickets must be finished or skipped first.",
+                  })
+                }
+              >
+                Close queue
+              </Button>
             )}
           </div>
-          {queue.status !== 'OPEN' && (
-            <p className="mt-3 text-xs text-ink-400">
-              Resume the queue to call the next customer.
-            </p>
-          )}
-          {hasCalledTicket && (
-            <p className="mt-3 text-xs text-ink-400">
-              Serve or skip {calledTicket?.token_label ?? 'the current ticket'} before calling the next one.
-            </p>
-          )}
-        </div>
-
-        <div className="rounded-2xl border border-ink-100 bg-white p-6">
-          <p className="text-xs font-medium uppercase tracking-wide text-ink-400">Next</p>
-          <p className="token-display mt-1 text-3xl font-semibold text-ink-800">
-            {state.next_ticket_label ?? '—'}
-          </p>
-          <p className="mt-4 text-xs font-medium uppercase tracking-wide text-ink-400">Waiting ({state.waiting_count})</p>
-          {state.waiting_labels.length === 0 ? (
-            <p className="mt-2 text-sm text-ink-400">No one waiting.</p>
-          ) : (
-            <ul className="mt-2 flex flex-wrap gap-2">
-              {state.waiting_labels.map((label) => (
-                <li key={label} className="rounded-md bg-ink-50 px-2.5 py-1 text-xs font-medium text-ink-600">
-                  {label}
-                </li>
+          <div className="mb-6 grid gap-4 sm:grid-cols-3">
+            <Metric label="Waiting" value={queue.waiting_count} />
+            <Metric
+              label="Estimated wait for new arrival"
+              value={`~${queue.estimated_wait_minutes}m`}
+            />
+            <Metric
+              label="Estimated service duration"
+              value={`~${queue.estimated_service_minutes}m`}
+            />
+          </div>
+          <div className="grid gap-6 lg:grid-cols-[1fr_360px]">
+            <Card title="Current visit">
+              <p className="token-display text-6xl font-bold">
+                {queue.current_serving_label ?? "—"}
+              </p>
+              {current && (
+                <div className="mt-4">
+                  <p className="font-semibold">{current.customer_name}</p>
+                  <p className="mt-1 break-all text-sm text-ink-500">
+                    {current.customer_email}
+                  </p>
+                  <div className="mt-3">
+                    <TicketStatusBadge status={current.status} />
+                  </div>
+                </div>
+              )}
+              <div className="mt-6 flex flex-wrap gap-3">
+                <Button
+                  loading={pending}
+                  disabled={
+                    queue.status !== "OPEN" ||
+                    !!queue.now_serving_ticket_id ||
+                    !waiting.length ||
+                    !tickets.data ||
+                    !!tickets.error
+                  }
+                  onClick={() => act(`${base}/next`)}
+                >
+                  Call next
+                </Button>
+                {current?.status === "CALLED" && (
+                  <Button
+                    disabled={pending || !!tickets.error}
+                    onClick={() =>
+                      act(`/api/staff/tickets/${current.id}/start`)
+                    }
+                  >
+                    Start service
+                  </Button>
+                )}
+                {current?.status === "SERVING" && (
+                  <Button
+                    disabled={pending || !!tickets.error}
+                    onClick={() =>
+                      act(`/api/staff/tickets/${current.id}/serve`)
+                    }
+                  >
+                    Complete visit
+                  </Button>
+                )}
+                {current && (
+                  <Button
+                    disabled={pending || !!tickets.error}
+                    variant="danger"
+                    onClick={() =>
+                      setConfirm({
+                        path: `/api/staff/tickets/${current.id}/skip`,
+                        title: `Skip ${current.token_label}?`,
+                        body: "The customer will lose this place in the queue.",
+                      })
+                    }
+                  >
+                    Skip
+                  </Button>
+                )}
+              </div>
+              <p className="mt-5 text-xs text-ink-500">
+                Call → start service → complete. Finish the current visit before
+                calling another customer.
+              </p>
+            </Card>
+            <Card title={`Waiting tickets (${waiting.length})`}>
+              {!waiting.length && <EmptyState title="No one waiting" />}
+              {waiting.map((t, i) => (
+                <div
+                  key={t.id}
+                  className="mb-3 rounded-xl border border-ink-100 p-4"
+                >
+                  <div className="flex justify-between gap-2">
+                    <strong>{t.token_label}</strong>
+                    <span className="text-xs text-ink-500">
+                      Position {i + 1 + (current ? 1 : 0)}
+                    </span>
+                  </div>
+                  <p className="mt-2 text-sm">{t.customer_name}</p>
+                  <p className="mt-1 text-xs text-ink-500">
+                    Waiting {t.waiting_minutes} min · joined{" "}
+                    {dateTime(t.created_at)}
+                  </p>
+                  <Button
+                    size="sm"
+                    variant="ghost"
+                    disabled={pending}
+                    className="mt-2"
+                    onClick={() =>
+                      setConfirm({
+                        path: `/api/staff/tickets/${t.id}/skip`,
+                        title: `Skip ${t.token_label}?`,
+                        body: "This removes the customer from the waiting list.",
+                      })
+                    }
+                  >
+                    Skip ticket
+                  </Button>
+                </div>
               ))}
-            </ul>
-          )}
-        </div>
-      </div>
+            </Card>
+          </div>
+        </>
+      )}
+      <ConfirmDialog
+        open={!!confirm}
+        title={confirm?.title ?? ""}
+        body={confirm?.body ?? ""}
+        danger
+        onConfirm={() => (confirm ? act(confirm.path) : undefined)}
+        onCancel={() => setConfirm(null)}
+      />
     </AppShell>
-  )
+  );
 }

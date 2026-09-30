@@ -1,92 +1,96 @@
-import { useEffect, useState } from 'react'
-import { Link } from 'react-router-dom'
-import { api, extractErrorMessage } from '../../lib/api'
-import { AppShell } from '../../components/AppShell'
-import { EmptyState, ErrorState, Skeleton } from '../../components/States'
-import { QueueStatusBadge } from '../../components/Badge'
-import type { Queue, Analytics } from '../../types'
+import { Link } from "react-router-dom";
+import { AppShell } from "../../components/AppShell";
+import {
+  Heading,
+  Card,
+  Metric,
+  ResourceState,
+  TrendChart,
+} from "../../components/Product";
 
-export default function StaffDashboard() {
-  const [queues, setQueues] = useState<Queue[] | null>(null)
-  const [analytics, setAnalytics] = useState<Analytics | null>(null)
-  const [error, setError] = useState<string | null>(null)
-
-  useEffect(() => {
-    async function load() {
-      try {
-        const [queuesRes, analyticsRes] = await Promise.all([
-          api.get<Queue[]>('/api/queues'),
-          api.get<Analytics>('/api/analytics'),
-        ])
-        setQueues(queuesRes.data)
-        setAnalytics(analyticsRes.data)
-        setError(null)
-      } catch (err) {
-        setError(extractErrorMessage(err))
-        setQueues([])
-      }
-    }
-    load()
-  }, [])
-
-  const openQueues = queues?.filter((q) => q.status === 'OPEN') ?? []
-
+import { QueueStatusBadge } from "../../components/Badge";
+import { EmptyState } from "../../components/States";
+import { useResource } from "../../lib/useResource";
+import type { QueueSummary, Analytics, Trends } from "../../types";
+export default function Dashboard() {
+  const queues = useResource<QueueSummary[]>("/api/product/queues", 5000);
+  const analytics = useResource<Analytics>("/api/analytics");
+  const trends = useResource<Trends>("/api/product/trends");
   return (
     <AppShell variant="staff">
-      <h1 className="text-xl font-semibold text-ink-900">Operations overview</h1>
-      <p className="mt-1 text-sm text-ink-500">A snapshot of everything running right now.</p>
-
-      {error && <div className="mt-6"><ErrorState message={error} /></div>}
-
-      {(!error || analytics) && <div className="mt-6 grid gap-4 sm:grid-cols-3">
-        <StatCard label="Active queues" value={analytics?.active_queues} loading={!analytics} />
-        <StatCard label="Served today" value={analytics?.customers_served_today} loading={!analytics} />
-        <StatCard label="Avg. wait (min)" value={analytics?.average_wait_minutes} loading={!analytics} />
-      </div>}
-
-      <div className="mt-8">
-        <div className="flex items-center justify-between">
-          <p className="text-sm font-semibold text-ink-900">Open queues</p>
-          <Link to="/staff/queues" className="text-sm font-medium text-signal-700 hover:underline">Manage queues →</Link>
+      <Heading
+        title="Operations overview"
+        body="A live view of your service desks, customers, and visits."
+        action={
+          <Link className="action-link" to="/staff/queues">
+            Manage queues →
+          </Link>
+        }
+      />
+      <ResourceState {...queues} />
+      <ResourceState {...analytics} />
+      <ResourceState {...trends} />
+      {analytics.data && trends.data && (
+        <div className="my-6 grid gap-4 sm:grid-cols-2 xl:grid-cols-4">
+          {[
+            ["Open queues", analytics.data.active_queues],
+            ["Waiting customers", trends.data.waiting],
+            ["Called / serving", trends.data.serving],
+            ["Completed today", analytics.data.completed_tickets_today],
+            ["Skipped today", analytics.data.skipped_tickets_today],
+            ["Average wait", `${analytics.data.average_wait_minutes}m`],
+            ["Average service", `${analytics.data.average_service_minutes}m`],
+            ["Active appointments", trends.data.active_appointments],
+          ].map(([label, value]) => (
+            <Metric key={label} label={String(label)} value={value} />
+          ))}
         </div>
-
-        <div className="mt-4 flex flex-col gap-2">
-          {queues === null ? (
-            <Skeleton className="h-16 w-full" />
-          ) : openQueues.length === 0 ? (
-            <EmptyState title="No open queues" body="Create a service, then open a queue to start accepting customers." action={<Link to="/staff/queues" className="text-sm font-medium text-signal-700 hover:underline">Set up a queue →</Link>} />
-          ) : (
-            openQueues.map((q) => (
+      )}
+      <div className="mt-6 grid gap-6 lg:grid-cols-2">
+        <Card title="Queue activity">
+          <p className="mb-4 text-xs text-ink-500">
+            Refreshes every 5 seconds
+            {queues.updatedAt
+              ? ` · updated ${queues.updatedAt.toLocaleTimeString()}`
+              : ""}
+          </p>
+          {queues.data?.length === 0 && (
+            <EmptyState
+              title="No service desks yet"
+              body="Create a service in Settings, then open a queue."
+            />
+          )}
+          {queues.data
+            ?.filter((q) => q.status !== "CLOSED")
+            .map((q) => (
               <Link
                 key={q.id}
                 to={`/staff/queue/${q.id}`}
-                className="flex items-center justify-between rounded-lg border border-ink-100 bg-white px-4 py-3 hover:border-ink-200"
+                className="mb-3 block rounded-xl border border-ink-100 p-4 hover:border-signal-400"
               >
-                <div>
-                  <p className="text-sm font-medium text-ink-800">{q.name}</p>
-                  <p className="text-xs text-ink-400">
-                    Now serving {q.current_serving_number ? `#${q.current_serving_number}` : '—'}
-                  </p>
+                <div className="flex items-center justify-between gap-3">
+                  <h3 className="font-semibold">{q.name}</h3>
+                  <QueueStatusBadge status={q.status} />
                 </div>
-                <QueueStatusBadge status={q.status} />
+                <p className="mt-1 text-xs text-ink-500">{q.service_name}</p>
+                <div className="mt-3 flex flex-wrap gap-4 text-sm">
+                  <span>{q.waiting_count} waiting</span>
+                  <span>Serving {q.current_serving_label ?? "—"}</span>
+                  <span>~{q.estimated_wait_minutes}m wait</span>
+                </div>
               </Link>
-            ))
-          )}
-        </div>
+            ))}
+        </Card>
+        <Card title="Weekly activity">
+          {trends.data && <TrendChart data={trends.data.daily} />}
+          <Link
+            to="/staff/analytics"
+            className="mt-5 inline-block text-sm font-semibold text-signal-700"
+          >
+            Explore analytics →
+          </Link>
+        </Card>
       </div>
     </AppShell>
-  )
-}
-
-function StatCard({ label, value, loading }: { label: string; value: number | undefined; loading: boolean }) {
-  return (
-    <div className="rounded-2xl border border-ink-100 bg-white p-5">
-      <p className="text-xs font-medium uppercase tracking-wide text-ink-400">{label}</p>
-      {loading ? (
-        <Skeleton className="mt-2 h-8 w-16" />
-      ) : (
-        <p className="mt-1 text-3xl font-semibold text-ink-900">{value}</p>
-      )}
-    </div>
-  )
+  );
 }

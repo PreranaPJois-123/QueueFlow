@@ -37,6 +37,7 @@ def get_ticket(ticket_id: str, db: Session = Depends(get_db), current_user: User
     current_label = queue_service._label(queue.current_serving_number) if queue.current_serving_number is not None else None
 
     return TicketDetailOut(
+        **queue_service.ticket_context(db, queue),
         ticket=ticket,
         people_ahead=people_ahead,
         estimated_wait_minutes=wait,

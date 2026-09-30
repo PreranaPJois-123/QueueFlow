@@ -1,57 +1,72 @@
-import { type ReactNode } from 'react'
-import { NavLink, useNavigate } from 'react-router-dom'
-import { useAuth } from '../lib/auth'
+import { type ReactNode } from "react";
+import { NavLink, useNavigate } from "react-router-dom";
+import { useAuth } from "../lib/auth";
 
 interface NavItem {
-  to: string
-  label: string
+  to: string;
+  label: string;
 }
 
 const customerNav: NavItem[] = [
-  { to: '/dashboard', label: 'Dashboard' },
-  { to: '/services', label: 'Services' },
-  { to: '/my-ticket', label: 'My ticket' },
-  { to: '/appointments', label: 'Appointments' },
-  { to: '/profile', label: 'Profile' },
-]
+  { to: "/dashboard", label: "Dashboard" },
+  { to: "/services", label: "Services" },
+  { to: "/join-queue", label: "Join queue" },
+  { to: "/my-ticket", label: "My ticket" },
+  { to: "/appointments", label: "Appointments" },
+  { to: "/profile", label: "Profile" },
+];
 
 const staffNav: NavItem[] = [
-  { to: '/staff/dashboard', label: 'Dashboard' },
-  { to: '/staff/queues', label: 'Queues' },
-  { to: '/staff/customers', label: 'Customers' },
-  { to: '/staff/appointments', label: 'Appointments' },
-  { to: '/staff/analytics', label: 'Analytics' },
-  { to: '/staff/settings', label: 'Settings' },
-]
+  { to: "/staff/dashboard", label: "Dashboard" },
+  { to: "/staff/queues", label: "Queues" },
+  { to: "/staff/customers", label: "Customers" },
+  { to: "/staff/appointments", label: "Appointments" },
+  { to: "/staff/analytics", label: "Analytics" },
+  { to: "/staff/settings", label: "Settings" },
+];
 
-export function AppShell({ children, variant }: { children: ReactNode; variant: 'customer' | 'staff' }) {
-  const { user, logout } = useAuth()
-  const navigate = useNavigate()
-  const items = variant === 'customer' ? customerNav : staffNav
+export function AppShell({
+  children,
+  variant,
+}: {
+  children: ReactNode;
+  variant: "customer" | "staff";
+}) {
+  const { user, logout } = useAuth();
+  const navigate = useNavigate();
+  const items = variant === "customer" ? customerNav : staffNav;
 
   function handleLogout() {
-    logout()
-    navigate('/login')
+    logout();
+    navigate("/login");
   }
 
   return (
     <div className="flex min-h-screen bg-paper">
-      <aside className="hidden w-60 flex-col border-r border-ink-100 bg-white px-4 py-6 md:flex">
+      <a
+        href="#main"
+        className="sr-only focus:not-sr-only focus:fixed focus:z-50 focus:bg-white focus:p-4"
+      >
+        Skip to content
+      </a>
+      <aside className="sticky top-0 hidden h-screen w-60 shrink-0 flex-col border-r border-ink-100 bg-white px-4 py-6 md:flex">
         <div className="mb-8 flex items-center gap-2 px-2">
           <div className="flex h-7 w-7 items-center justify-center rounded-md bg-ink-900 text-sm font-bold text-white">
             Q
           </div>
           <span className="text-sm font-semibold text-ink-900">QueueFlow</span>
         </div>
-        <nav className="flex flex-1 flex-col gap-1">
+        <nav className="flex min-w-0 flex-1 flex-col gap-1">
           {items.map((item) => (
             <NavLink
               key={item.to}
               to={item.to}
-              end
+              end={item.to !== "/staff/queues"}
               className={({ isActive }) =>
                 `rounded-lg px-3 py-2 text-sm font-medium transition-colors ${
-                  isActive ? 'bg-signal-50 text-signal-700' : 'text-ink-500 hover:bg-ink-50 hover:text-ink-800'
+                  isActive
+                    ? "bg-signal-50 text-signal-700"
+                    : "text-ink-500 hover:bg-ink-50 hover:text-ink-800"
                 }`
               }
             >
@@ -60,7 +75,9 @@ export function AppShell({ children, variant }: { children: ReactNode; variant: 
           ))}
         </nav>
         <div className="mt-auto border-t border-ink-100 pt-4">
-          <p className="truncate px-2 text-sm font-medium text-ink-800">{user?.full_name}</p>
+          <p className="truncate px-2 text-sm font-medium text-ink-800">
+            {user?.full_name}
+          </p>
           <p className="truncate px-2 text-xs text-ink-400">{user?.email}</p>
           <button
             onClick={handleLogout}
@@ -71,7 +88,7 @@ export function AppShell({ children, variant }: { children: ReactNode; variant: 
         </div>
       </aside>
 
-      <div className="flex flex-1 flex-col">
+      <div className="flex min-w-0 flex-1 flex-col">
         <header className="flex items-center justify-between border-b border-ink-100 bg-white px-4 py-3 md:hidden">
           <span className="text-sm font-semibold text-ink-900">QueueFlow</span>
           <button onClick={handleLogout} className="text-sm text-ink-500">
@@ -83,10 +100,10 @@ export function AppShell({ children, variant }: { children: ReactNode; variant: 
             <NavLink
               key={item.to}
               to={item.to}
-              end
+              end={item.to !== "/staff/queues"}
               className={({ isActive }) =>
                 `whitespace-nowrap rounded-lg px-3 py-1.5 text-xs font-medium ${
-                  isActive ? 'bg-signal-50 text-signal-700' : 'text-ink-500'
+                  isActive ? "bg-signal-50 text-signal-700" : "text-ink-500"
                 }`
               }
             >
@@ -94,8 +111,10 @@ export function AppShell({ children, variant }: { children: ReactNode; variant: 
             </NavLink>
           ))}
         </nav>
-        <main className="flex-1 px-4 py-6 md:px-8 md:py-8">{children}</main>
+        <main id="main" className="min-w-0 flex-1 px-4 py-6 md:px-8 md:py-8">
+          <div className="mx-auto max-w-7xl">{children}</div>
+        </main>
       </div>
     </div>
-  )
+  );
 }

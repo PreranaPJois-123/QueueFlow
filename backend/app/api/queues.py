@@ -1,3 +1,4 @@
+import time
 from starlette.concurrency import run_in_threadpool
 from fastapi import APIRouter, Depends, HTTPException, status, WebSocket, WebSocketDisconnect
 from sqlalchemy.orm import Session
@@ -63,6 +64,7 @@ async def join_queue(queue_id: str, db: Session = Depends(get_db),
         current_label = queue_service._label(queue.current_serving_number)
 
     return TicketDetailOut(
+        **queue_service.ticket_context(db, queue),
         ticket=ticket, people_ahead=people_ahead, estimated_wait_minutes=wait,
         current_serving_label=current_label, queue_status=queue.status,
         smart_alert=False,
@@ -85,10 +87,17 @@ async def queue_websocket(websocket: WebSocket, queue_id: str):
         with SessionLocal() as db:
             state = queue_service.build_queue_state(db, db.get(Queue, queue_id))
         await websocket.send_json({"event": "queue_state", "data": state})
+        last_ping = 0.0
         while True:
             # Clients don't need to send anything; this just keeps the connection open
             # and lets us detect disconnects.
-            await websocket.receive_text()
+            message = await websocket.receive_text()
+            if message != "ping" or time.monotonic() - last_ping < 5:
+                continue
+            last_ping = time.monotonic()
+            with SessionLocal() as db:
+                state = queue_service.build_queue_state(db, db.get(Queue, queue_id))
+            await websocket.send_json({"event": "queue_state", "data": state})
     except WebSocketDisconnect:
         pass
     finally:

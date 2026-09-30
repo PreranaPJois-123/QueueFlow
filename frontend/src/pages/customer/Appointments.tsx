@@ -1,153 +1,259 @@
-import { useEffect, useState } from 'react'
-import { api, extractErrorMessage } from '../../lib/api'
-import { AppShell } from '../../components/AppShell'
-import { EmptyState, ErrorState, Skeleton } from '../../components/States'
-import { Button } from '../../components/Button'
-import { useToast } from '../../components/Toast'
-import type { Appointment, Service } from '../../types'
-
+import { useClock } from "../../lib/useClock";
+import { useState } from "react";
+import { useSearchParams } from "react-router-dom";
+import { AppShell } from "../../components/AppShell";
+import { Button } from "../../components/Button";
+import { ConfirmDialog } from "../../components/ConfirmDialog";
+import { EmptyState } from "../../components/States";
+import { Heading, Card, ResourceState } from "../../components/Product";
+import { dateTime } from "../../lib/format";
+import { useResource } from "../../lib/useResource";
+import { api, extractErrorMessage } from "../../lib/api";
+import { useToast } from "../../components/Toast";
+import type { Service, CustomerData } from "../../types";
 export default function Appointments() {
-  const [appointments, setAppointments] = useState<Appointment[] | null>(null)
-  const [services, setServices] = useState<Service[]>([])
-  const [error, setError] = useState<string | null>(null)
-  const [showForm, setShowForm] = useState(false)
-  const [serviceId, setServiceId] = useState('')
-  const [scheduledTime, setScheduledTime] = useState('')
-  const [notes, setNotes] = useState('')
-  const [submitting, setSubmitting] = useState(false)
-  const { push } = useToast()
-
-  async function load() {
+  const now = useClock();
+  const [params] = useSearchParams();
+  const mine = useResource<CustomerData>("/api/product/mine");
+  const services = useResource<Service[]>("/api/services");
+  const [serviceId, setServiceId] = useState(params.get("service") ?? "");
+  const [day, setDay] = useState("");
+  const [time, setTime] = useState("");
+  const [notes, setNotes] = useState("");
+  const [pending, setPending] = useState(false);
+  const [cancel, setCancel] = useState<string | null>(null);
+  const [filter, setFilter] = useState("upcoming");
+  const chosen = serviceId || services.data?.[0]?.id || "";
+  const offset = day ? -new Date(`${day}T12:00:00`).getTimezoneOffset() : 0;
+  const availability = useResource<{
+    slots: string[];
+    duration_minutes: number;
+  }>(
+    chosen && day
+      ? `/api/appointments/availability/${chosen}?day=${day}&utc_offset_minutes=${offset}`
+      : null,
+    15000,
+  );
+  const { push } = useToast();
+  async function book(e: React.FormEvent) {
+    e.preventDefault();
+    setPending(true);
     try {
-      const [apptRes, svcRes] = await Promise.all([
-        api.get<Appointment[]>('/api/appointments'),
-        api.get<Service[]>('/api/services', { params: { active_only: false } }),
-      ])
-      setAppointments(apptRes.data)
-      setServices(svcRes.data)
-      setError(null)
-      const firstActive = svcRes.data.find((service) => service.is_active)
-      if (firstActive) setServiceId((previous) => previous || firstActive.id)
-    } catch (err) {
-      setError(extractErrorMessage(err))
-      setAppointments([])
-    }
-  }
-
-  useEffect(() => {
-    load()
-  }, [])
-
-  const activeServices = services.filter((service) => service.is_active)
-
-  async function handleCreate(e: React.FormEvent) {
-    e.preventDefault()
-    setSubmitting(true)
-    try {
-      await api.post('/api/appointments', {
-        service_id: serviceId,
-        scheduled_time: new Date(scheduledTime).toISOString(),
+      if (!time || new Date(time).getTime() <= now)
+        throw new Error("Choose a future available time");
+      await api.post("/api/appointments", {
+        service_id: chosen,
+        scheduled_time: time,
         notes: notes || undefined,
-      })
-      push('Appointment scheduled', 'success')
-      setShowForm(false)
-      setNotes('')
-      load()
-    } catch (err) {
-      push(extractErrorMessage(err), 'error')
+      });
+      push("Appointment confirmed", "success");
+      setTime("");
+      setNotes("");
+      mine.refresh();
+      availability.refresh();
+    } catch (e) {
+      push(
+        e instanceof Error && !("response" in e)
+          ? e.message
+          : extractErrorMessage(e),
+        "error",
+      );
+      availability.refresh();
     } finally {
-      setSubmitting(false)
+      setPending(false);
     }
   }
-
-  async function handleCancel(id: string) {
+  async function cancelBooking() {
     try {
-      await api.post(`/api/appointments/${id}/cancel`)
-      push('Appointment cancelled', 'success')
-      load()
-    } catch (err) {
-      push(extractErrorMessage(err), 'error')
+      await api.post(`/api/appointments/${cancel}/cancel`);
+      push("Appointment cancelled", "success");
+      setCancel(null);
+      mine.refresh();
+      availability.refresh();
+    } catch (e) {
+      push(extractErrorMessage(e), "error");
     }
   }
-
+  const rows =
+    mine.data?.appointments.filter(
+      (a) =>
+        filter === "all" ||
+        (filter === "upcoming"
+          ? ["SCHEDULED", "CHECKED_IN"].includes(a.status) &&
+            new Date(a.scheduled_time).getTime() >= now
+          : !["SCHEDULED", "CHECKED_IN"].includes(a.status) ||
+            new Date(a.scheduled_time).getTime() < now),
+    ) ?? [];
+  const today = new Date();
+  const dateMin = `${today.getFullYear()}-${String(today.getMonth() + 1).padStart(2, "0")}-${String(today.getDate()).padStart(2, "0")}`;
   return (
     <AppShell variant="customer">
-      <div className="flex items-center justify-between">
-        <div>
-          <h1 className="text-xl font-semibold text-ink-900">Appointments</h1>
-          <p className="mt-1 text-sm text-ink-500">Schedule ahead instead of joining a live queue.</p>
-        </div>
-        {activeServices.length > 0 && !error && (
-          <Button size="sm" onClick={() => setShowForm((v) => !v)}>
-            {showForm ? 'Close' : 'New appointment'}
-          </Button>
-        )}
-      </div>
-
-      {error && <div className="mt-6"><ErrorState message={error} /></div>}
-
-      {showForm && (
-        <form onSubmit={handleCreate} className="mt-6 flex flex-col gap-4 rounded-2xl border border-ink-100 bg-white p-6 sm:max-w-md">
-          <div>
-            <label className="mb-1.5 block text-sm font-medium text-ink-700">Service</label>
-            <select
-              value={serviceId}
-              onChange={(e) => setServiceId(e.target.value)}
-              className="w-full rounded-lg border border-ink-200 bg-white px-3 py-2.5 text-sm outline-none focus:border-signal-500"
+      <Heading
+        title="Appointments"
+        body="Plan a visit. Available times reflect real service bookings."
+      />
+      <ResourceState {...mine} />
+      <ResourceState {...services} />
+      <div className="mt-6 grid gap-6 lg:grid-cols-[360px_1fr]">
+        <Card title="Book your visit">
+          {services.data?.length ? (
+            <form onSubmit={book} className="space-y-4">
+              <label className="label">
+                Service
+                <select
+                  className="field mt-2"
+                  value={chosen}
+                  onChange={(e) => {
+                    setServiceId(e.target.value);
+                    setTime("");
+                  }}
+                >
+                  {services.data.map((s) => (
+                    <option key={s.id} value={s.id}>
+                      {s.name}
+                    </option>
+                  ))}
+                </select>
+              </label>
+              <label className="label">
+                Date
+                <input
+                  required
+                  type="date"
+                  min={dateMin}
+                  className="field mt-2"
+                  value={day}
+                  onChange={(e) => {
+                    setDay(e.target.value);
+                    setTime("");
+                  }}
+                />
+              </label>
+              <ResourceState {...availability} />
+              <label className="label">
+                Available time
+                <select
+                  required
+                  className="field mt-2"
+                  value={availability.data?.slots.includes(time) ? time : ""}
+                  onChange={(e) => setTime(e.target.value)}
+                  disabled={!availability.data || !!availability.error}
+                >
+                  <option value="">Choose a time</option>
+                  {availability.data?.slots.map((slot) => (
+                    <option key={slot} value={slot}>
+                      {new Date(slot).toLocaleTimeString([], {
+                        hour: "2-digit",
+                        minute: "2-digit",
+                      })}
+                    </option>
+                  ))}
+                </select>
+              </label>
+              {availability.data && !availability.data.slots.length && (
+                <p className="text-sm text-ink-500">
+                  No available times on this date. Choose another day.
+                </p>
+              )}
+              <p className="text-xs text-ink-500">
+                Times are shown in your local timezone. Reservations last 30
+                minutes; overlapping service and personal bookings are blocked.
+              </p>
+              <label className="label">
+                Notes (optional)
+                <textarea
+                  className="field mt-2"
+                  maxLength={2000}
+                  value={notes}
+                  onChange={(e) => setNotes(e.target.value)}
+                />
+              </label>
+              {time && (
+                <p className="rounded-lg bg-signal-50 p-3 text-sm text-signal-700">
+                  Confirm {dateTime(time)}
+                </p>
+              )}
+              <Button
+                type="submit"
+                loading={pending}
+                disabled={
+                  !availability.data?.slots.includes(time) ||
+                  !!availability.error
+                }
+                className="w-full"
+              >
+                Confirm appointment
+              </Button>
+            </form>
+          ) : (
+            services.data && (
+              <p className="text-sm text-ink-500">
+                Appointments will open when a service is published.
+              </p>
+            )
+          )}
+        </Card>
+        <Card title="Your visits">
+          <div className="mb-5 flex gap-2">
+            {["upcoming", "history", "all"].map((f) => (
+              <Button
+                key={f}
+                size="sm"
+                variant={filter === f ? "primary" : "secondary"}
+                onClick={() => setFilter(f)}
+              >
+                {f.charAt(0).toUpperCase() + f.slice(1)}
+              </Button>
+            ))}
+          </div>
+          {mine.data && !rows.length && (
+            <EmptyState
+              title="No appointments here"
+              body="Your confirmed visits will appear here."
+            />
+          )}
+          {rows.map((a) => (
+            <div
+              key={a.id}
+              className="mb-4 rounded-xl border border-ink-100 p-4"
             >
-              {activeServices.map((s) => (
-                <option key={s.id} value={s.id}>{s.name}</option>
-              ))}
-            </select>
-          </div>
-          <div>
-            <label className="mb-1.5 block text-sm font-medium text-ink-700">Date &amp; time</label>
-            <input
-              type="datetime-local"
-              required
-              value={scheduledTime}
-              onChange={(e) => setScheduledTime(e.target.value)}
-              className="w-full rounded-lg border border-ink-200 px-3 py-2.5 text-sm outline-none focus:border-signal-500"
-            />
-          </div>
-          <div>
-            <label className="mb-1.5 block text-sm font-medium text-ink-700">Notes (optional)</label>
-            <textarea
-              value={notes}
-              onChange={(e) => setNotes(e.target.value)}
-              rows={2}
-              className="w-full rounded-lg border border-ink-200 px-3 py-2.5 text-sm outline-none focus:border-signal-500"
-            />
-          </div>
-          <Button type="submit" loading={submitting} className="w-full">Schedule</Button>
-        </form>
-      )}
-
-      <div className="mt-6">
-        {appointments === null ? (
-          <Skeleton className="h-32 w-full" />
-        ) : appointments.length === 0 ? (
-          <EmptyState title="No appointments yet" body={activeServices.length ? 'Choose New appointment to schedule your first visit.' : 'Appointments open when staff publish a service.'} />
-        ) : (
-          <ul className="flex flex-col gap-2">
-            {appointments.map((a) => (
-              <li key={a.id} className="flex items-center justify-between rounded-lg border border-ink-100 bg-white px-4 py-3 text-sm">
+              <div className="flex flex-wrap items-start justify-between gap-3">
                 <div>
-                  <p className="font-medium text-ink-900">{services.find((service) => service.id === a.service_id)?.name ?? 'Service unavailable'}</p>
-                  <p className="font-medium text-ink-800">{new Date(a.scheduled_time).toLocaleString()}</p>
-                  {a.notes && <p className="text-ink-400">{a.notes}</p>}
-                </div>
-                <div className="flex items-center gap-3">
-                  <span className="text-xs font-medium text-ink-500">{a.status.replace('_', ' ').toLowerCase()}</span>
-                  {a.status === 'SCHEDULED' && (
-                    <Button variant="ghost" size="sm" onClick={() => handleCancel(a.id)}>Cancel</Button>
+                  <h3 className="font-semibold">{a.service_name}</h3>
+                  <p className="mt-2 text-sm text-ink-500">
+                    {dateTime(a.scheduled_time)}
+                  </p>
+                  {a.notes && (
+                    <p className="mt-2 text-sm text-ink-500">{a.notes}</p>
                   )}
                 </div>
-              </li>
-            ))}
-          </ul>
-        )}
+                <span className="rounded-full bg-ink-50 px-3 py-1 text-xs">
+                  {a.status.replaceAll("_", " ")}
+                </span>
+              </div>
+              {a.status === "SCHEDULED" && (
+                <Button
+                  className="mt-3"
+                  size="sm"
+                  variant="ghost"
+                  onClick={() => setCancel(a.id)}
+                >
+                  Cancel appointment
+                </Button>
+              )}
+            </div>
+          ))}
+        </Card>
       </div>
+      <ConfirmDialog
+        open={!!cancel}
+        title="Cancel appointment?"
+        body="This will release your reservation."
+        confirmLabel="Cancel appointment"
+        danger
+        onConfirm={cancelBooking}
+        onCancel={() => setCancel(null)}
+      />
     </AppShell>
-  )
+  );
 }

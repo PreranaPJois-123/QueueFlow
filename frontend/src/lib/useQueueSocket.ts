@@ -1,67 +1,78 @@
-import { useEffect, useState } from 'react'
-import { WS_BASE } from './api'
-import type { QueueState } from '../types'
+import { useEffect, useState } from "react";
+import { WS_BASE } from "./api";
+import type { QueueState } from "../types";
 
-/**
- * Subscribes to a queue's real-time state over WebSocket.
- * Reconnects with backoff on drop, and always keeps `state` as the
- * latest snapshot the server broadcast (join, call-next, skip, serve,
- * pause/resume/close all push a fresh QueueState).
- */
 export function useQueueSocket(queueId: string | null) {
-  const [state, setState] = useState<QueueState | null>(null)
-  const [connected, setConnected] = useState(false)
-
+  const [snapshot, setSnapshot] = useState<{
+    id: string;
+    state: QueueState;
+  } | null>(null);
+  const [connection, setConnection] = useState<{
+    id: string;
+    status: string;
+  } | null>(null);
   useEffect(() => {
-    setState(null)
-    setConnected(false)
-    if (!queueId) return
-    let shouldRun = true
-    let retryDelay = 1000
-    let socket: WebSocket | null = null
-    let retryTimeout: ReturnType<typeof setTimeout> | null = null
-
+    if (!queueId) return;
+    const id = queueId;
+    let active = true;
+    let delay = 1000;
+    let socket: WebSocket | null = null;
+    let retry: ReturnType<typeof setTimeout> | undefined;
+    let heartbeat: ReturnType<typeof setInterval> | undefined;
+    let lastFrame = Date.now();
+    const status = (value: string) => {
+      if (active) setConnection({ id, status: value });
+    };
     function connect() {
-      if (!shouldRun) return
-      socket = new WebSocket(`${WS_BASE}/api/queues/${queueId}/ws`)
-
+      if (!active) return;
+      status(navigator.onLine ? "RECONNECTING" : "OFFLINE");
+      socket = new WebSocket(`${WS_BASE}/api/queues/${id}/ws`);
       socket.onopen = () => {
-        if (!shouldRun) return
-        setConnected(true)
-        retryDelay = 1000
-      }
+        lastFrame = Date.now();
+        socket?.send("ping");
+      };
       socket.onmessage = (event) => {
-        if (!shouldRun) return
+        if (!active) return;
+        lastFrame = Date.now();
         try {
-          const payload = JSON.parse(event.data)
-          if (payload.event === 'queue_state') {
-            setState(payload.data as QueueState)
+          const payload = JSON.parse(event.data);
+          if (payload.event === "queue_state") {
+            setSnapshot({ id, state: payload.data as QueueState });
+            status("LIVE");
+            delay = 1000;
           }
         } catch {
-          // ignore malformed frames
+          /* malformed frames never replace a valid snapshot */
         }
-      }
+      };
       socket.onclose = () => {
-        if (!shouldRun) return
-        setConnected(false)
-        if (shouldRun) {
-          retryTimeout = setTimeout(connect, retryDelay)
-          retryDelay = Math.min(retryDelay * 2, 15000)
-        }
-      }
-      socket.onerror = () => {
-        socket?.close()
-      }
+        if (!active) return;
+        status(navigator.onLine ? "RECONNECTING" : "OFFLINE");
+        retry = setTimeout(connect, delay);
+        delay = Math.min(delay * 2, 15000);
+      };
+      socket.onerror = () => socket?.close();
     }
-
-    connect()
-
+    connect();
+    heartbeat = setInterval(() => {
+      if (socket?.readyState === WebSocket.OPEN) {
+        if (Date.now() - lastFrame > 45000) socket.close();
+        else socket.send("ping");
+      }
+      if (!navigator.onLine) status("OFFLINE");
+    }, 15000);
     return () => {
-      shouldRun = false
-      if (retryTimeout) clearTimeout(retryTimeout)
-      socket?.close()
-    }
-  }, [queueId])
-
-  return { state, connected }
+      active = false;
+      clearTimeout(retry);
+      clearInterval(heartbeat);
+      socket?.close();
+    };
+  }, [queueId]);
+  const status =
+    connection?.id === queueId ? connection.status : "RECONNECTING";
+  return {
+    state: snapshot?.id === queueId ? snapshot.state : null,
+    connected: status === "LIVE",
+    status,
+  };
 }

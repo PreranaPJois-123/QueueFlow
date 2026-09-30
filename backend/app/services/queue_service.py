@@ -69,8 +69,8 @@ def get_people_ahead(db: Session, queue: Queue, ticket: Ticket) -> int:
 
 
 def estimate_wait_minutes(db: Session, queue: Queue, people_ahead: int) -> int:
-    avg_seconds = get_average_service_seconds(db, queue.id)
-    return max(0, round((people_ahead * avg_seconds) / 60))
+    from app.services.prediction import predict_wait
+    return predict_wait(db, queue, people_ahead)["wait_minutes"]
 
 
 def _lock_queue(db: Session, queue_id: str) -> Queue:
@@ -312,3 +312,11 @@ def build_queue_state(db: Session, queue: Queue) -> dict:
         "waiting_labels": [t.token_label for t in waiting],
         "waiting_count": len(waiting),
     }
+
+
+def ticket_context(db, queue):
+    from app.services.prediction import predict_duration
+    prediction = predict_duration(db, queue.id)
+    return dict(queue_name=queue.name, service_name=queue.service.name,
+                prediction_source=prediction["source"], prediction_samples=prediction["sample_count"],
+                estimated_service_minutes=prediction["service_minutes"])

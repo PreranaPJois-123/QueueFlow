@@ -1,4 +1,4 @@
-@import url('https://fonts.googleapis.com/css2?family=Public+Sans:ital,wght@0,400;0,500;0,600;0,700;0,800;1,400&display=swap');
+@import url("https://fonts.googleapis.com/css2?family=Public+Sans:ital,wght@0,400;0,500;0,600;0,700;0,800;1,400&display=swap");
 @import "tailwindcss";
 
 @theme {
@@ -43,7 +43,9 @@ html {
 body {
   background: var(--color-paper);
   color: var(--color-ink-900);
-  font-feature-settings: "tnum" 1, "ss01" 1;
+  font-feature-settings:
+    "tnum" 1,
+    "ss01" 1;
 }
 
 /* Token numerals get slightly wider tracking + tabular figures for legibility at a glance */
@@ -58,9 +60,66 @@ body {
 }
 
 @media (prefers-reduced-motion: reduce) {
-  *, *::before, *::after {
+  *,
+  *::before,
+  *::after {
     animation-duration: 0.001ms !important;
     animation-iteration-count: 1 !important;
     transition-duration: 0.001ms !important;
   }
+}
+
+@layer components {
+  .field {
+    width: 100%;
+    border: 1px solid var(--color-ink-200);
+    border-radius: 0.65rem;
+    background: white;
+    padding: 0.7rem 0.85rem;
+    font-size: 0.875rem;
+    color: var(--color-ink-900);
+  }
+  .field:focus {
+    border-color: var(--color-signal-500);
+  }
+  .label {
+    display: block;
+    font-size: 0.875rem;
+    font-weight: 500;
+    color: var(--color-ink-700);
+  }
+  .action-link {
+    display: inline-flex;
+    align-items: center;
+    gap: 0.5rem;
+    border: 1px solid var(--color-ink-200);
+    border-radius: 0.65rem;
+    padding: 0.65rem 1rem;
+    background: white;
+    color: var(--color-signal-700);
+    font-size: 0.875rem;
+    font-weight: 600;
+    transition: background 0.15s;
+  }
+  .action-link:hover {
+    background: var(--color-signal-50);
+    border-color: var(--color-signal-400);
+  }
+}
+body {
+  margin: 0;
+}
+button,
+a,
+select {
+  -webkit-tap-highlight-color: transparent;
+}
+button:not(:disabled),
+select {
+  cursor: pointer;
+}
+input,
+textarea,
+select {
+  max-width: 100%;
 }

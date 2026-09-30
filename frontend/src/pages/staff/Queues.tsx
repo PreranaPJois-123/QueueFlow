@@ -1,135 +1,171 @@
-import { useEffect, useState } from 'react'
-import { Link } from 'react-router-dom'
-import { api, extractErrorMessage } from '../../lib/api'
-import { AppShell } from '../../components/AppShell'
-import { EmptyState, ErrorState, Skeleton } from '../../components/States'
-import { Button } from '../../components/Button'
-import { QueueStatusBadge } from '../../components/Badge'
-import { useToast } from '../../components/Toast'
-import type { Queue, Service } from '../../types'
-
-export default function StaffQueues() {
-  const [queues, setQueues] = useState<Queue[] | null>(null)
-  const [services, setServices] = useState<Service[]>([])
-  const [error, setError] = useState<string | null>(null)
-  const [showForm, setShowForm] = useState(false)
-  const [serviceId, setServiceId] = useState('')
-  const [name, setName] = useState('')
-  const [submitting, setSubmitting] = useState(false)
-  const { push } = useToast()
-
-  async function load() {
+import { useState } from "react";
+import { Link } from "react-router-dom";
+import { AppShell } from "../../components/AppShell";
+import { Button } from "../../components/Button";
+import { QueueStatusBadge } from "../../components/Badge";
+import { Heading, Card, ResourceState } from "../../components/Product";
+import { predictionLabel } from "../../lib/format";
+import { EmptyState } from "../../components/States";
+import { useResource } from "../../lib/useResource";
+import { useToast } from "../../components/Toast";
+import { api, extractErrorMessage } from "../../lib/api";
+import type { QueueSummary, Service } from "../../types";
+export default function Queues() {
+  const queues = useResource<QueueSummary[]>("/api/product/queues", 5000);
+  const services = useResource<Service[]>("/api/services");
+  const [show, setShow] = useState(false);
+  const [name, setName] = useState("");
+  const [service, setService] = useState("");
+  const [pending, setPending] = useState(false);
+  const [search, setSearch] = useState("");
+  const [status, setStatus] = useState("ALL");
+  const { push } = useToast();
+  async function create(e: React.FormEvent) {
+    e.preventDefault();
+    setPending(true);
     try {
-      const [queuesRes, servicesRes] = await Promise.all([
-        api.get<Queue[]>('/api/queues'),
-        api.get<Service[]>('/api/services'),
-      ])
-      setQueues(queuesRes.data)
-      setServices(servicesRes.data)
-      setError(null)
-      if (servicesRes.data.length > 0) setServiceId((previous) => previous || servicesRes.data[0].id)
-    } catch (err) {
-      setError(extractErrorMessage(err))
-      setQueues([])
-    }
-  }
-
-  useEffect(() => {
-    load()
-  }, [])
-
-  async function handleCreate(e: React.FormEvent) {
-    e.preventDefault()
-    setSubmitting(true)
-    try {
-      await api.post('/api/queues', { service_id: serviceId, name })
-      push('Queue created', 'success')
-      setName('')
-      setShowForm(false)
-      load()
-    } catch (err) {
-      push(extractErrorMessage(err), 'error')
+      await api.post("/api/queues", {
+        name: name.trim(),
+        service_id: service || services.data?.[0]?.id,
+      });
+      push("Queue opened", "success");
+      setShow(false);
+      setName("");
+      queues.refresh();
+    } catch (e) {
+      push(extractErrorMessage(e), "error");
     } finally {
-      setSubmitting(false)
+      setPending(false);
     }
   }
-
+  const filtered = queues.data?.filter(
+    (q) =>
+      `${q.name} ${q.service_name}`
+        .toLowerCase()
+        .includes(search.toLowerCase()) &&
+      (status === "ALL" || q.status === status),
+  );
   return (
     <AppShell variant="staff">
-      <div className="flex items-center justify-between">
-        <div>
-          <h1 className="text-xl font-semibold text-ink-900">Queues</h1>
-          <p className="mt-1 text-sm text-ink-500">Every queue across all services.</p>
-        </div>
-        {services.length > 0 && (
-          <Button size="sm" onClick={() => setShowForm((v) => !v)}>
-            {showForm ? 'Close' : 'New queue'}
+      <Heading
+        title="Queues"
+        body="Operate every service desk from one workspace."
+        action={
+          <Button
+            onClick={() => setShow(!show)}
+            disabled={!services.data?.length}
+          >
+            {show ? "Close form" : "Open new queue"}
           </Button>
-        )}
-      </div>
-
-      {queues !== null && services.length === 0 && !error && (
-        <p className="mt-4 text-sm text-ink-400">
-          Create a service in <Link to="/staff/settings" className="text-signal-700 hover:underline">Settings</Link> before opening a queue.
+        }
+      />
+      <ResourceState {...queues} />
+      <ResourceState {...services} />
+      {services.data?.length === 0 && (
+        <p className="my-5 text-sm text-ink-500">
+          Create a service in{" "}
+          <Link className="text-signal-700" to="/staff/settings">
+            Settings
+          </Link>{" "}
+          to open a queue.
         </p>
       )}
-
-      {error && <div className="mt-6"><ErrorState message={error} /></div>}
-
-      {showForm && (
-        <form onSubmit={handleCreate} className="mt-6 flex flex-col gap-4 rounded-2xl border border-ink-100 bg-white p-6 sm:max-w-md">
-          <div>
-            <label className="mb-1.5 block text-sm font-medium text-ink-700">Service</label>
-            <select
-              value={serviceId}
-              onChange={(e) => setServiceId(e.target.value)}
-              className="w-full rounded-lg border border-ink-200 bg-white px-3 py-2.5 text-sm outline-none focus:border-signal-500"
-            >
-              {services.map((s) => (
-                <option key={s.id} value={s.id}>{s.name}</option>
-              ))}
-            </select>
-          </div>
-          <div>
-            <label className="mb-1.5 block text-sm font-medium text-ink-700">Queue name</label>
-            <input
-              required
-              value={name}
-              onChange={(e) => setName(e.target.value)}
-              placeholder="e.g. Main Counter"
-              className="w-full rounded-lg border border-ink-200 px-3 py-2.5 text-sm outline-none focus:border-signal-500"
-            />
-          </div>
-          <Button type="submit" loading={submitting} className="w-full">Create queue</Button>
-        </form>
+      {show && (
+        <Card title="Open queue" className="my-6 max-w-lg">
+          <form onSubmit={create} className="space-y-4">
+            <label className="label">
+              Service
+              <select
+                className="field mt-2"
+                value={service || services.data?.[0]?.id || ""}
+                onChange={(e) => setService(e.target.value)}
+              >
+                {services.data?.map((s) => (
+                  <option key={s.id} value={s.id}>
+                    {s.name}
+                  </option>
+                ))}
+              </select>
+            </label>
+            <label className="label">
+              Queue name
+              <input
+                className="field mt-2"
+                required
+                maxLength={255}
+                value={name}
+                onChange={(e) => setName(e.target.value)}
+                placeholder="Main service desk"
+              />
+            </label>
+            <Button loading={pending} disabled={!name.trim()} type="submit">
+              Open queue
+            </Button>
+          </form>
+        </Card>
       )}
-
-      <div className="mt-6">
-        {queues === null ? (
-          <Skeleton className="h-40 w-full" />
-        ) : queues.length === 0 ? (
-          <EmptyState title="No queues yet" body={services.length ? 'Create your first queue above.' : 'Create a service in Settings first.'} action={!services.length && <Link to="/staff/settings" className="text-sm font-medium text-signal-700 hover:underline">Manage services →</Link>} />
-        ) : (
-          <ul className="flex flex-col gap-2">
-            {queues.map((q) => (
-              <li key={q.id}>
-                <Link
-                  to={`/staff/queue/${q.id}`}
-                  className="flex items-center justify-between rounded-lg border border-ink-100 bg-white px-4 py-3 hover:border-ink-200"
-                >
-                  <div>
-                    <p className="text-sm font-medium text-ink-800">{q.name}</p>
-                    <p className="text-xs text-ink-400">
-                      Now serving {q.current_serving_number ? `#${q.current_serving_number}` : '—'}
-                    </p>
-                  </div>
-                  <QueueStatusBadge status={q.status} />
-                </Link>
-              </li>
-            ))}
-          </ul>
-        )}
+      <div className="my-6 flex flex-wrap gap-3">
+        <input
+          aria-label="Search queues"
+          className="field max-w-sm"
+          value={search}
+          onChange={(e) => setSearch(e.target.value)}
+          placeholder="Search queues or services…"
+        />
+        <select
+          aria-label="Queue status filter"
+          className="field max-w-xs"
+          value={status}
+          onChange={(e) => setStatus(e.target.value)}
+        >
+          {["ALL", "OPEN", "PAUSED", "CLOSED"].map((s) => (
+            <option key={s} value={s}>
+              {s}
+            </option>
+          ))}
+        </select>
       </div>
+      {filtered && !filtered.length && (
+        <EmptyState
+          title="No matching queues"
+          body="Open a new queue or change your filters."
+        />
+      )}
+      <div className="grid gap-5 lg:grid-cols-2">
+        {filtered?.map((q) => (
+          <Card key={q.id}>
+            <div className="flex justify-between gap-3">
+              <div>
+                <h2 className="text-lg font-semibold">{q.name}</h2>
+                <p className="mt-1 text-sm text-ink-500">{q.service_name}</p>
+              </div>
+              <QueueStatusBadge status={q.status} />
+            </div>
+            <dl className="my-5 grid grid-cols-3 gap-3">
+              {[
+                ["Waiting", q.waiting_count],
+                ["Now serving", q.current_serving_label ?? "—"],
+                ["Est. wait", `${q.estimated_wait_minutes}m`],
+              ].map(([label, value]) => (
+                <div key={label}>
+                  <dt className="text-xs text-ink-500">{label}</dt>
+                  <dd className="mt-2 text-xl font-semibold">{value}</dd>
+                </div>
+              ))}
+            </dl>
+            <p className="mb-4 text-xs text-ink-500">
+              {predictionLabel(q.prediction_source)}
+            </p>
+            <Link className="action-link" to={`/staff/queue/${q.id}`}>
+              Open controls →
+            </Link>
+          </Card>
+        ))}
+      </div>
+      <p className="mt-5 text-xs text-ink-500">
+        Queue snapshots refresh every 5 seconds. Individual controls receive
+        WebSocket updates.
+      </p>
     </AppShell>
-  )
+  );
 }
