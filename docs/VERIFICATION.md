@@ -5,7 +5,7 @@ Source baseline: GitHub main and uploaded ZIP at
 
 ## Executed locally
 
-- Backend regression suite: 72 passed, one PostgreSQL-only concurrency test skipped
+- Backend regression suite: 73 passed, one PostgreSQL-only concurrency test skipped
   under SQLite; two upstream TestClient deprecation warnings.
 - Regression coverage includes customer/staff authorization, JWT validation, FIFO
   transitions, duplicate joins, ownership, pause/resume/close, appointment future
@@ -17,6 +17,21 @@ Source baseline: GitHub main and uploaded ZIP at
 - Python dependency consistency (`pip check`): passed.
 - PostgreSQL migration SQL generation: passed. Models and database schema are
   unchanged by this update, so no new migration is required.
+
+## GitHub CI and live checks
+
+Commit `be51b613dbc6512e21a9df5557dffabaeb823055` passed GitHub Actions run
+[36712198589](https://github.com/PreranaPJois-123/QueueFlow/actions/runs/36712198589):
+73 tests passed against PostgreSQL, including the concurrent booking and duplicate
+join test; migration upgrade/check/downgrade/re-upgrade and both Docker builds
+passed. A follow-up adds a future-appointment no-show guard and page metadata;
+its workflow result is checked separately after publication.
+
+The live backend returned HTTP 200 with database and Redis both up. The new
+`/api/product/queues` endpoint returned HTTP 200 after deployment. The live
+frontend served the matching built asset; browser inspection verified the landing
+page and a logged-out dashboard redirect to login. No application console errors
+were observed on those pages (browser-extension messages are unrelated).
 
 ## External verification gates
 

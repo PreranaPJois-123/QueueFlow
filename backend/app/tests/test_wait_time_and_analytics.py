@@ -67,11 +67,13 @@ def test_analytics_empty_state_has_no_negative_or_null_crash(client):
 
 
 def test_health_endpoint(client, monkeypatch):
+    monkeypatch.setenv("RENDER_GIT_COMMIT", "test-revision")
     from app.core.redis_client import redis_client
     monkeypatch.setattr(redis_client, "ping", lambda: True)
     resp = client.get("/api/health")
     assert resp.status_code == 200
     body = resp.json()
     assert body["status"] == "healthy"
+    assert body["revision"] == "test-revision"
     assert body["database"] == "up"
     assert body["redis"] == "up"

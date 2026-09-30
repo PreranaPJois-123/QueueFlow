@@ -1,3 +1,5 @@
+from datetime import datetime, timezone
+from app.services.prediction import utc
 from starlette.concurrency import run_in_threadpool
 from fastapi import APIRouter, Depends, HTTPException
 from sqlalchemy.orm import Session
@@ -42,6 +44,8 @@ def update_appointment(appointment_id: str, action: str, db: Session = Depends(g
     current, next_status = transitions[action]
     if appointment.status != current:
         raise HTTPException(409, f"Appointment must be {current.value.lower().replace('_', ' ')}")
+    if action == "no-show" and utc(appointment.scheduled_time) > datetime.now(timezone.utc):
+        raise HTTPException(409, "A future appointment cannot be marked as no-show")
     appointment.status = next_status
     db.commit()
     db.refresh(appointment)

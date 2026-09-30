@@ -1,3 +1,4 @@
+import os
 import time
 
 from fastapi import FastAPI, Request, Depends
@@ -69,6 +70,7 @@ def health():
     return JSONResponse(status_code=200 if db_ok and redis_ok else 503, content={
         "status": status_str,
         "service": settings.APP_NAME,
+        "revision": os.environ.get("RENDER_GIT_COMMIT"),
         "database": "up" if db_ok else "down",
         "redis": "up" if redis_ok else "down",
     })

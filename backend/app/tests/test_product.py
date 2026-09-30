@@ -132,3 +132,12 @@ def test_blank_names_and_booking_horizon_are_rejected(client):
     assert client.post('/api/queues', headers=staff, json={'name':'  ', 'service_id':service['id']}).status_code == 422
     response = client.post('/api/appointments', headers=customer, json={'service_id':service['id'], 'scheduled_time':(datetime.now(timezone.utc)+timedelta(days=91)).isoformat()})
     assert response.status_code == 422
+
+
+def test_future_appointment_cannot_be_marked_no_show(client):
+    staff, customer, service, queue = setup(client)
+    when = datetime.now(timezone.utc) + timedelta(days=1)
+    booking = client.post('/api/appointments', headers=customer, json={'service_id':service['id'], 'scheduled_time':when.isoformat()}).json()
+    response = client.post(f"/api/staff/appointments/{booking['id']}/no-show", headers=staff)
+    assert response.status_code == 409
+    assert client.get('/api/appointments', headers=customer).json()[0]['status'] == 'SCHEDULED'
