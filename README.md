@@ -52,6 +52,7 @@ In `frontend`, copy `.env.example` to `.env`, then run `npm ci` and `npm run dev
 Local example URLs are development-only. Production builds require `VITE_API_URL`;
 Render builds require a public HTTPS origin. Never commit populated `.env` files.
 
+<<<<<<< HEAD
 ### Docker Compose
 
 ```sh
@@ -72,6 +73,11 @@ recreate the volume.
 **AWS EC2:** see [docs/AWS_EC2.md](docs/AWS_EC2.md) for a single-instance deployment
 with least-privilege security groups, backups and reboot recovery. End-to-end
 check against any deployment: `scripts/smoke_test.py`.
+=======
+For the optional local Docker stack, copy root `.env.example` to `.env` and set a
+real `JWT_SECRET_KEY`, then run `docker compose up --build`. Docker images were built successfully in GitHub CI; the full Compose runtime
+has not been exercised.
+>>>>>>> 53aa3faa382e169f79fb911f954a11c4a42a30dc
 
 ## Testing and CI
 
@@ -88,6 +94,7 @@ Redis throttling was verified separately using an actual local HTTP server.
 Frontend: `npm ci`, `npm run lint`, and `VITE_API_URL=BACKEND_ORIGIN npm run build`.
 Lint and TypeScript checks are run before publication.
 
+<<<<<<< HEAD
 Verified on 2026-10-22 against real PostgreSQL 16 and Redis 7 (run natively; the
 container images could not be pulled in that environment): Alembic migration
 and idempotent re-run, admin bootstrap, `/api/health`, the full
@@ -98,6 +105,8 @@ proxy with foreign origins rejected (403), data retained across a database and
 backend restart, and `pytest` (73 passed, 1 skipped). `docker compose config`
 validates; the Compose containers themselves were not run in that session.
 
+=======
+>>>>>>> 53aa3faa382e169f79fb911f954a11c4a42a30dc
 `.github/workflows/ci.yml` adds PostgreSQL/Redis service containers, migration
 upgrade/check/downgrade/re-upgrade, backend tests, frontend checks and Docker image
 builds. Earlier repairs passed that workflow, including PostgreSQL and both Docker builds.
