@@ -23,8 +23,7 @@ Venues created by the seed script are fictional and labelled **Sample** everywhe
 | Backend | Python 3.12, FastAPI, SQLAlchemy 2, Alembic, Pydantic 2, Argon2id |
 | Data | PostgreSQL 16 with pgvector and btree_gist; Redis 7 (rate limits, locks, pub/sub) |
 | Realtime | WebSockets, fanned out across instances through Redis pub/sub |
-| AI | Configurable embeddings (offline lexical or any OpenAI-compatible API) and LLM (Anthropic or OpenAI-compatible) |
-| Ops | Docker Compose, nginx (non-root) reverse proxy, GitHub Actions |
+| AI | RAG over pgvector (configurable embeddings: offline lexical or OpenAI-compatible); LLM via OpenAI-compatible API (Groq, Llama 3.3 70B) or Anthropic | Ops | Docker Compose, nginx (non-root) reverse proxy, GitHub Actions |
 
 Architecture: [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md) · Security: [docs/SECURITY.md](docs/SECURITY.md) ·
 API: [docs/API.md](docs/API.md) (live OpenAPI at `/docs`) · Data model: [docs/schema.md](docs/schema.md) ·
