@@ -1,112 +1,120 @@
-import {
-  createContext,
-  useContext,
-  useEffect,
-  useState,
-  type ReactNode,
-} from "react";
-import { Navigate, useLocation } from "react-router-dom";
-import { api, extractErrorMessage } from "./api";
+import { createContext, useCallback, useContext, useEffect, useState, type ReactNode } from "react";
 import axios from "axios";
+import { Navigate, useLocation } from "react-router-dom";
+import { api, extractErrorMessage, setCsrfToken, setUnauthorizedHandler } from "./api";
 import { Button } from "../components/Button";
 import { ErrorState } from "../components/States";
 import type { User, UserRole } from "../types";
 
+interface RegisterInput {
+  fullName: string;
+  email: string;
+  password: string;
+  confirmPassword: string;
+}
+
 interface AuthContextValue {
   user: User | null;
   loading: boolean;
-  login: (email: string, password: string) => Promise<void>;
-  register: (
-    email: string,
-    password: string,
-    fullName: string,
-  ) => Promise<void>;
-  logout: () => void;
-  updateProfile: (fullName: string) => Promise<void>;
   error: string | null;
+  login: (email: string, password: string) => Promise<User>;
+  register: (input: RegisterInput) => Promise<User>;
+  logout: () => Promise<void>;
+  logoutEverywhere: () => Promise<void>;
+  updateProfile: (changes: Partial<Pick<User, "full_name" | "pref_sound_enabled" | "pref_browser_enabled">>) => Promise<void>;
   retry: () => void;
 }
 
 const AuthContext = createContext<AuthContextValue | null>(null);
 
+// oxlint-disable-next-line react/only-export-components -- shared helper for routing by role.
+export function homeFor(user: User): string {
+  if (user.role === "ADMIN") return "/admin/venues";
+  if (user.role === "STAFF") return "/staff/venues";
+  return "/dashboard";
+}
+
 export function AuthProvider({ children }: { children: ReactNode }) {
   const [user, setUser] = useState<User | null>(null);
-  const [loading, setLoading] = useState(
-    () => !!localStorage.getItem("queueflow_token"),
-  );
+  const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
 
-  async function fetchMe() {
+  const loadSession = useCallback(async () => {
+    setLoading(true);
     try {
-      const { data } = await api.get<User>("/api/auth/me");
-      setUser(data);
+      const { data } = await api.get<{ user: User; csrf_token: string }>("/api/auth/session");
+      setCsrfToken(data.csrf_token);
+      setUser(data.user);
       setError(null);
     } catch (failure) {
       if (axios.isAxiosError(failure) && failure.response?.status === 401) {
         setUser(null);
-        localStorage.removeItem("queueflow_token");
+        setError(null);
       } else {
         setError(extractErrorMessage(failure));
       }
     } finally {
       setLoading(false);
     }
-  }
+  }, []);
 
   useEffect(() => {
-    const token = localStorage.getItem("queueflow_token");
-    if (token) {
-      void Promise.resolve().then(fetchMe);
-    }
+    void loadSession();
+  }, [loadSession]);
+
+  useEffect(() => {
+    setUnauthorizedHandler(() => {
+      setUser(null);
+      setCsrfToken(null);
+    });
+    return () => setUnauthorizedHandler(null);
   }, []);
 
   async function login(email: string, password: string) {
-    const { data } = await api.post("/api/auth/login", { email, password });
-    localStorage.setItem("queueflow_token", data.access_token);
+    const { data } = await api.post<{ user: User; csrf_token: string }>("/api/auth/login", { email, password });
+    setCsrfToken(data.csrf_token);
+    setUser(data.user);
+    return data.user;
+  }
+
+  async function register(input: RegisterInput) {
+    const { data } = await api.post<{ user: User; csrf_token: string }>("/api/auth/register", {
+      full_name: input.fullName,
+      email: input.email,
+      password: input.password,
+      confirm_password: input.confirmPassword,
+    });
+    setCsrfToken(data.csrf_token);
+    setUser(data.user);
+    return data.user;
+  }
+
+  async function logout() {
     try {
-      const { data: me } = await api.get<User>("/api/auth/me");
-      setUser(me);
-    } catch (error) {
-      localStorage.removeItem("queueflow_token");
+      await api.post("/api/auth/logout");
+    } finally {
+      setCsrfToken(null);
       setUser(null);
-      throw error;
     }
   }
 
-  async function register(email: string, password: string, fullName: string) {
-    await api.post("/api/auth/register", {
-      email,
-      password,
-      full_name: fullName,
-    });
-    await login(email, password);
+  async function logoutEverywhere() {
+    try {
+      await api.post("/api/auth/logout-all");
+    } finally {
+      setCsrfToken(null);
+      setUser(null);
+    }
   }
 
-  async function updateProfile(fullName: string) {
-    const { data } = await api.patch<User>("/api/auth/me", {
-      full_name: fullName,
-    });
+  async function updateProfile(changes: Parameters<AuthContextValue["updateProfile"]>[0]) {
+    const { data } = await api.patch<User>("/api/auth/me", changes);
     setUser(data);
-  }
-
-  function logout() {
-    localStorage.removeItem("queueflow_token");
-    setUser(null);
-    setError(null);
   }
 
   return (
     <AuthContext.Provider
-      value={{
-        user,
-        loading,
-        login,
-        register,
-        logout,
-        updateProfile,
-        error,
-        retry: fetchMe,
-      }}
+      value={{ user, loading, error, login, register, logout, logoutEverywhere, updateProfile, retry: loadSession }}
     >
       {children}
     </AuthContext.Provider>
@@ -120,20 +128,13 @@ export function useAuth() {
   return ctx;
 }
 
-export function RequireAuth({
-  children,
-  roles,
-}: {
-  children: ReactNode;
-  roles?: UserRole[];
-}) {
-  const { user, loading, error, retry, logout } = useAuth();
+export function RequireAuth({ children, roles }: { children: ReactNode; roles?: UserRole[] }) {
+  const { user, loading, error, retry } = useAuth();
   const location = useLocation();
-
   if (loading) {
     return (
-      <div className="flex h-screen items-center justify-center text-ink-400">
-        Loading…
+      <div className="flex h-screen items-center justify-center text-sm text-ink-400" role="status">
+        Loading your account…
       </div>
     );
   }
@@ -141,22 +142,10 @@ export function RequireAuth({
     return (
       <div className="mx-auto mt-20 max-w-md space-y-4 p-6">
         <ErrorState message={error} />
-        <Button onClick={retry}>Retry connection</Button>
-        <Button variant="secondary" onClick={logout}>
-          Log out
-        </Button>
+        <Button onClick={retry}>Try again</Button>
       </div>
     );
-  if (!user) {
-    return <Navigate to="/login" state={{ from: location }} replace />;
-  }
-  if (roles && !roles.includes(user.role)) {
-    return (
-      <Navigate
-        to={user.role === "CUSTOMER" ? "/dashboard" : "/staff/dashboard"}
-        replace
-      />
-    );
-  }
+  if (!user) return <Navigate to="/login" state={{ from: location }} replace />;
+  if (roles && !roles.includes(user.role)) return <Navigate to={homeFor(user)} replace />;
   return <>{children}</>;
 }

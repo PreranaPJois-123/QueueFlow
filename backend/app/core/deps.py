@@ -1,41 +1,36 @@
-from fastapi import Depends, HTTPException, status
-from fastapi.security import OAuth2PasswordBearer
+from fastapi import Depends, HTTPException, Request, status
 from sqlalchemy.orm import Session
 
+from app.core.config import settings
 from app.core.database import get_db
-from app.core.security import decode_access_token
+from app.core.sessions import resolve_session
 from app.models.models import User, UserRole
 
-oauth2_scheme = OAuth2PasswordBearer(tokenUrl="api/auth/login", auto_error=False)
+_UNAUTHENTICATED = HTTPException(status.HTTP_401_UNAUTHORIZED, "Please sign in to continue")
 
 
-def get_current_user(token: str = Depends(oauth2_scheme), db: Session = Depends(get_db)) -> User:
-    credentials_exception = HTTPException(
-        status_code=status.HTTP_401_UNAUTHORIZED,
-        detail="Could not validate credentials",
-        headers={"WWW-Authenticate": "Bearer"},
-    )
-    if token is None:
-        raise credentials_exception
-    payload = decode_access_token(token)
-    if payload is None:
-        raise credentials_exception
-    user_id = payload.get("sub")
-    if user_id is None:
-        raise credentials_exception
-    user = db.query(User).filter(User.id == user_id).first()
+def get_current_user(request: Request, db: Session = Depends(get_db)) -> User:
+    session = resolve_session(db, request.cookies.get(settings.SESSION_COOKIE_NAME))
+    if session is None:
+        raise _UNAUTHENTICATED
+    user = db.get(User, session.user_id)
     if user is None or not user.is_active:
-        raise credentials_exception
+        raise _UNAUTHENTICATED
+    request.state.session = session
     return user
+
+
+def get_optional_user(request: Request, db: Session = Depends(get_db)) -> User | None:
+    try:
+        return get_current_user(request, db)
+    except HTTPException:
+        return None
 
 
 def require_roles(*roles: UserRole):
     def dependency(current_user: User = Depends(get_current_user)) -> User:
         if current_user.role not in roles:
-            raise HTTPException(
-                status_code=status.HTTP_403_FORBIDDEN,
-                detail="You do not have permission to perform this action",
-            )
+            raise HTTPException(status.HTTP_403_FORBIDDEN, "You do not have permission to perform this action")
         return current_user
     return dependency
 

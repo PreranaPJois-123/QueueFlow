@@ -7,13 +7,13 @@ from app.provision_user import bootstrap_admin_from_env
 def test_first_admin_provisioned_once(monkeypatch, db_session):
     monkeypatch.setenv("INITIAL_ADMIN_EMAIL", "operator@example.com")
     monkeypatch.setenv("INITIAL_ADMIN_NAME", "Operator")
-    monkeypatch.setenv("INITIAL_ADMIN_PASSWORD", "strong-password-for-first-admin")
+    monkeypatch.setenv("INITIAL_ADMIN_PASSWORD", "strong-password-4-first-admin")
     bootstrap_admin_from_env()
     bootstrap_admin_from_env()
     users = db_session.query(User).all()
     assert len(users) == 1
     assert users[0].role == UserRole.ADMIN
-    assert users[0].hashed_password != "strong-password-for-first-admin"
+    assert users[0].hashed_password != "strong-password-4-first-admin"
 
 
 def test_bootstrap_rejects_partial_config(monkeypatch):
@@ -30,7 +30,7 @@ def test_bootstrap_does_not_promote_customer(monkeypatch, db_session):
     db_session.commit()
     monkeypatch.setenv("INITIAL_ADMIN_EMAIL", "owner@example.com")
     monkeypatch.setenv("INITIAL_ADMIN_NAME", "Owner")
-    monkeypatch.setenv("INITIAL_ADMIN_PASSWORD", "strong-password-for-first-admin")
+    monkeypatch.setenv("INITIAL_ADMIN_PASSWORD", "strong-password-4-first-admin")
     with pytest.raises(ValueError, match="existing account"):
         bootstrap_admin_from_env()
     assert db_session.query(User).one().role == UserRole.CUSTOMER

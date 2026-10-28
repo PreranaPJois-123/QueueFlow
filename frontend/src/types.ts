@@ -6,6 +6,8 @@ export interface User {
   full_name: string;
   role: UserRole;
   is_active: boolean;
+  pref_sound_enabled: boolean;
+  pref_browser_enabled: boolean;
   created_at: string;
 }
 
@@ -143,4 +145,216 @@ export interface Trends {
   serving: number;
   appointments: number;
   active_appointments: number;
+}
+
+// ----------------------------- Venues & bookings -----------------------------
+
+export type VenueKind = "HOSPITAL" | "SHOP" | "HOTEL";
+export type BookingStatus = "CONFIRMED" | "CHECKED_IN" | "IN_SERVICE" | "COMPLETED" | "CANCELLED" | "NO_SHOW";
+export type ReservationStatus = "CONFIRMED" | "CHECKED_IN" | "CHECKED_OUT" | "CANCELLED" | "NO_SHOW";
+
+export interface Page<T> {
+  items: T[];
+  total: number;
+  limit: number;
+  offset: number;
+}
+
+export interface VenueSummary {
+  id: string;
+  kind: VenueKind;
+  name: string;
+  slug: string;
+  city: string;
+  address: string;
+  description: string;
+  category: string | null;
+  is_sample: boolean;
+  is_active: boolean;
+  currency: string;
+  timezone: string;
+  // Optional listing facts: shown only when the backend provides them.
+  service_count?: number;
+  provider_count?: number;
+  starting_price?: string | null;
+  highlights?: string[];
+}
+
+export interface Specialization {
+  id: string;
+  name: string;
+  slug: string;
+  description: string;
+}
+
+export interface Offering {
+  id: string;
+  name: string;
+  description: string;
+  duration_minutes: number;
+  price: string | null;
+  specialization_id: string | null;
+  is_active: boolean;
+}
+
+export interface Provider {
+  id: string;
+  name: string;
+  title: string;
+  bio: string;
+  specialization_id: string | null;
+  is_active: boolean;
+  offering_ids: string[];
+}
+
+export interface RoomType {
+  id: string;
+  name: string;
+  description: string;
+  amenities: string;
+  max_occupancy: number;
+  nightly_rate: string;
+  total_rooms: number;
+  is_active: boolean;
+}
+
+export interface VenueDetail extends VenueSummary {
+  phone: string | null;
+  booking_horizon_days: number;
+  min_notice_minutes: number;
+  cancel_cutoff_minutes: number;
+  tax_rate: string;
+  check_in_time: string | null;
+  check_out_time: string | null;
+  free_cancellation_hours: number;
+  specializations: Specialization[];
+  offerings: Offering[];
+  providers: Provider[];
+  room_types: RoomType[];
+}
+
+export interface Slot {
+  start_at: string;
+  end_at: string;
+  provider_id: string;
+  provider_name: string;
+}
+
+export interface Quote {
+  room_type_id: string;
+  room_type_name: string;
+  check_in: string;
+  check_out: string;
+  guests: number;
+  rooms: number;
+  nights: number;
+  nightly_rate: string;
+  subtotal: string;
+  tax_rate: string;
+  taxes: string;
+  total: string;
+  currency: string;
+  rooms_left: number;
+  available: boolean;
+  free_cancellation_until: string;
+}
+
+export interface LiveQueue {
+  queue_status: "OPEN" | "PAUSED";
+  current_token: string | null;
+  delay_minutes: number;
+  position: number | null;
+  eta_minutes: number | null;
+  expected_start: string | null;
+}
+
+export interface Booking {
+  id: string;
+  reference: string;
+  status: BookingStatus;
+  venue_id: string;
+  venue_name: string;
+  venue_kind: VenueKind;
+  venue_timezone: string;
+  offering_id: string;
+  offering_name: string;
+  specialization: string | null;
+  provider_id: string;
+  provider_name: string;
+  start_at: string;
+  end_at: string;
+  service_date: string;
+  token_label: string;
+  notes: string | null;
+  can_cancel: boolean;
+  cancel_cutoff_minutes: number;
+  created_at: string;
+  live: LiveQueue | null;
+}
+
+export interface Reservation {
+  id: string;
+  reference: string;
+  status: ReservationStatus;
+  venue_id: string;
+  venue_name: string;
+  venue_timezone: string;
+  room_type_id: string;
+  room_type_name: string;
+  check_in: string;
+  check_out: string;
+  check_in_time: string | null;
+  check_out_time: string | null;
+  guests: number;
+  rooms: number;
+  nights: number;
+  nightly_rate: string;
+  subtotal: string;
+  taxes: string;
+  total: string;
+  currency: string;
+  cancellation_fee: string;
+  special_requests: string | null;
+  free_cancellation_until: string;
+  created_at: string;
+}
+
+export interface AppNotification {
+  id: string;
+  type: string;
+  message: string;
+  booking_id: string | null;
+  reservation_id: string | null;
+  is_read: boolean;
+  created_at: string;
+}
+
+export interface WayzenSource {
+  id: string;
+  title: string;
+  section: string;
+  source: string;
+  category: string;
+  entity_id: string | null;
+  score: number;
+  excerpt: string;
+}
+
+export interface WayzenAction {
+  id: string;
+  type: "book_appointment" | "reserve_hotel" | "cancel_booking" | "cancel_reservation";
+  status: "pending" | "executed" | "dismissed" | "expired" | "failed";
+  summary: Record<string, string | number | boolean | null>;
+  result: Record<string, string> | null;
+  expires_at: string;
+}
+
+export interface WayzenMessage {
+  id: string;
+  role: "user" | "assistant";
+  content: string;
+  mode: "generated" | "limited" | "error" | null;
+  sources: WayzenSource[];
+  created_at: string;
+  actions: WayzenAction[];
 }

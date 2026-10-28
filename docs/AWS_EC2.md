@@ -1,11 +1,16 @@
 # AWS EC2 deployment (Docker Compose)
 
-Single EC2 instance running the existing Compose stack. Only the frontend nginx
-container is public; it serves the SPA and proxies `/api` (HTTP + WebSockets),
-`/docs` and `/openapi.json` to the backend over the private Compose network.
+Single EC2 instance running the Compose stack. Only the frontend nginx container is
+public; it serves the SPA and proxies `/api` (HTTP + WebSockets), `/docs` and
+`/openapi.json` to the backend over the private Compose network.
+
+> Status: this guide has **not** been executed end to end for this release (no AWS
+> account was available while building it). Every step uses the same Compose file
+> and configuration that was validated locally. Do not deploy publicly without your
+> own review and approval of the costs below.
 
 ```
-Internet ──80──▶ frontend (nginx) ──/api──▶ backend (FastAPI) ──▶ postgres (volume)
+Internet ──80/443──▶ frontend (nginx :8080) ──/api──▶ backend (FastAPI) ──▶ postgres (volume)
                                                          └──────▶ redis
           (postgres 5432, redis 6379, backend 8000 bind to 127.0.0.1 only)
 ```
@@ -57,7 +62,7 @@ echo '/swapfile none swap sw 0 0' | sudo tee -a /etc/fstab
 ```sh
 git clone https://github.com/PreranaPJois-123/QueueFlow.git && cd QueueFlow
 cp .env.example .env && chmod 600 .env
-sed -i "s/^JWT_SECRET_KEY=.*/JWT_SECRET_KEY=$(openssl rand -hex 32)/; s/^POSTGRES_PASSWORD=.*/POSTGRES_PASSWORD=$(openssl rand -hex 24)/" .env
+sed -i "s/^JWT_SECRET_KEY=.*/JWT_SECRET_KEY=$(openssl rand -hex 32)/; s/^POSTGRES_PASSWORD=.*/POSTGRES_PASSWORD=$(openssl rand -hex 24)/; s/^APP_DB_PASSWORD=.*/APP_DB_PASSWORD=$(openssl rand -hex 24)/" .env
 nano .env   # set the values below
 ```
 
@@ -65,6 +70,8 @@ nano .env   # set the values below
 VITE_API_URL=http://ELASTIC_IP
 CORS_ORIGINS=http://ELASTIC_IP
 FRONTEND_PORT=80
+COOKIE_SECURE=false        # plain-HTTP demo only; true once HTTPS is set up (below)
+SEED_SAMPLE_DATA=true      # fictional "Sample" venues for a demo; false for real data
 INITIAL_ADMIN_EMAIL=you@example.com
 INITIAL_ADMIN_NAME=Your Name
 INITIAL_ADMIN_PASSWORD=<strong password, typed here only>
@@ -107,10 +114,49 @@ scp -i KEY.pem ubuntu@ELASTIC_IP:QueueFlow/backups/*.sql.gz .  # copy off-instan
 Dumps on the same disk do not protect against losing the instance; copy them
 off regularly (EBS snapshots are an option but are billed).
 
+## HTTPS (required before real users)
+
+1. Point a DNS `A` record at the Elastic IP and open port `443` in the security group.
+2. Put a TLS terminator in front of the frontend container. The simplest option is
+   Caddy on the host: set `FRONTEND_PORT=8080` and `FRONTEND_BIND=127.0.0.1` so nginx
+   is reachable only through Caddy, install Caddy from its official apt repository, and use a `Caddyfile` of `your.domain { reverse_proxy 127.0.0.1:8080 }`.
+   Caddy obtains and renews Let's Encrypt certificates automatically and proxies
+   WebSockets.
+3. Set `VITE_API_URL` and `CORS_ORIGINS` to `https://your.domain`, `COOKIE_SECURE=true`,
+   then `docker compose up -d --build` (the URL is compiled into the SPA).
+4. Close port 80 except for the ACME challenge/redirect Caddy handles.
+
+## Secrets
+
+`.env` (mode 600, never committed) holds every secret. For stronger isolation store
+them in AWS SSM Parameter Store (SecureString) and render `.env` at boot with an
+instance role limited to those parameters. Rotate `JWT_SECRET_KEY` to sign everyone
+out; rotate `APP_DB_PASSWORD` with `ALTER ROLE queueflow_app PASSWORD ...` first.
+
+## Monitoring
+
+- `curl -fsS http://localhost/api/health` from cron or an external uptime check
+  (returns 503 when PostgreSQL or Redis is down; also reports `knowledge_chunks`).
+- `docker compose ps` shows container health; `docker compose logs -f backend` for logs.
+- Optional (billed): CloudWatch agent for disk/memory and a CloudWatch alarm on the
+  instance status check; an AWS Budgets alert for cost.
+
+## Rollback
+
+```sh
+./scripts/backup_db.sh                       # always back up before upgrading
+git log --oneline -5 && git checkout <previous-tag-or-commit>
+docker compose up -d --build
+```
+
+Migrations only add tables/columns in this release, so the previous application
+version runs against the newer schema for walk-in queues. To restore data:
+`gunzip -c backups/<file>.sql.gz | docker compose exec -T postgres psql -U queueflow -d queueflow`
+(into an empty database). Never run `alembic downgrade` on production data.
+
 ## Limits and teardown
 
-- **HTTP only.** No domain or TLS is configured, so credentials travel
-  unencrypted; treat this as a demo deployment until HTTPS is added.
+- **HTTP-only demos** send credentials unencrypted; add HTTPS (above) before real use.
 - One backend process (the in-memory WebSocket manager requires it).
 - Updating: `git pull && docker compose up -d --build`.
 - To stop all charges: terminate the instance, delete its EBS volume if

@@ -21,14 +21,15 @@ def setup_queue(client):
 @pytest.mark.parametrize('role', ['STAFF', 'ADMIN'])
 def test_public_registration_cannot_grant_privileges(client, role):
     response = client.post('/api/auth/register', json={
-        'email': 'attacker@example.com', 'password': 'testpass123', 'full_name': 'Test', 'role': role})
+        'email': 'attacker@example.com', 'password': 'testpass123', 'confirm_password': 'testpass123',
+        'full_name': 'Test', 'role': role})
     assert response.status_code == 403
     assert client.post('/api/auth/login', json={'email': 'attacker@example.com', 'password': 'testpass123'}).status_code == 401
 
 
 def test_multibyte_password_returns_validation_error(client):
     response = client.post('/api/auth/register', json={
-        'email': 'unicode@example.com', 'password': '😀' * 30, 'full_name': 'Test'})
+        'email': 'unicode@example.com', 'password': '😀' * 30, 'confirm_password': '😀' * 30, 'full_name': 'Test'})
     assert response.status_code == 422
 
 
@@ -102,7 +103,7 @@ def test_websocket_rejects_missing_queue_and_untrusted_origin(client):
 
 
 def test_cors_restricts_browser_origins(client):
-    headers = {'origin':'http://localhost:5173', 'access-control-request-method':'POST', 'access-control-request-headers':'authorization,content-type'}
+    headers = {'origin':'http://localhost:5173', 'access-control-request-method':'POST', 'access-control-request-headers':'x-csrf-token,content-type'}
     response = client.options('/api/queues', headers=headers)
     assert response.status_code == 200
     assert response.headers['access-control-allow-origin'] == headers['origin']
@@ -165,13 +166,10 @@ def test_production_rejects_placeholder_secret_and_wildcard():
             Settings(_env_file=None, **{**valid, key:value})
 
 
-def test_expired_and_incomplete_jwt_rejected(client):
-    from jose import jwt
-    from app.core.config import settings
-    for payload in [{'sub':'missing'}, {'exp':datetime.now(timezone.utc)+timedelta(minutes=5)},
-                    {'sub':'missing', 'exp':datetime.now(timezone.utc)-timedelta(minutes=1)}]:
-        token = jwt.encode(payload, settings.JWT_SECRET_KEY, algorithm=settings.JWT_ALGORITHM)
-        assert client.get('/api/auth/me', headers={'Authorization':f'Bearer {token}'}).status_code == 401
+def test_tampered_session_cookie_rejected(client):
+    headers = register_and_login(client, 'tamper@example.com')
+    tampered = {**headers, 'Cookie': headers['Cookie'].replace('qf_session=', 'qf_session=x')}
+    assert client.get('/api/auth/me', headers=tampered).status_code == 401
 
 
 def test_websocket_multiple_clients_disconnect_and_reconnect(client):

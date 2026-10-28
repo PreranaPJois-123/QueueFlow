@@ -1,5 +1,13 @@
 # Render deployment
 
+> **2.0 note (not re-verified on Render).** QueueFlow 2.0 uses cookie sessions and
+> needs PostgreSQL with the `vector` and `btree_gist` extensions. The supported
+> topology is same-origin (nginx in front of the API, as in Docker Compose / EC2).
+> The Render blueprint below serves the SPA and API on different `onrender.com`
+> hosts, which are cross-site; it would need `COOKIE_SAMESITE=none`,
+> `COOKIE_SECURE=true` and the extensions enabled on the Render database. This was
+> not tested, so treat the Render section as 1.x documentation.
+
 ## Current state
 
 The existing Render frontend is at https://queueflow-frontend-wy9t.onrender.com

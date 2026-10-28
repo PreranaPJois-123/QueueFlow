@@ -1,0 +1,14 @@
+[
+  {"question": "How do I book a hospital appointment?", "expected_source": "guide:booking-hospital"},
+  {"question": "How do I check my queue token?", "expected_source": "guide:queue-tokens"},
+  {"question": "How can I reserve a hotel room?", "expected_source": "guide:hotel-reservations"},
+  {"question": "How do I cancel an appointment?", "expected_source": "guide:cancellation-policies"},
+  {"question": "Where can I find my upcoming bookings?", "expected_source": "guide:faq"},
+  {"question": "Is there a fee if I cancel my hotel booking late?", "expected_source": "guide:cancellation-policies"},
+  {"question": "When will I get notified that my turn is near?", "expected_source": "guide:queue-tokens"},
+  {"question": "I forgot my password", "expected_source": "guide:account-and-privacy"},
+  {"question": "Can I book a haircut at a salon?", "expected_source": "guide:booking-shop"},
+  {"question": "What does sample venue mean?", "expected_source": "guide:faq"},
+  {"question": "How is the waiting time estimated?", "expected_source": "guide:queue-tokens"},
+  {"question": "Can I change the dates of my hotel stay?", "expected_source": "guide:hotel-reservations"}
+]

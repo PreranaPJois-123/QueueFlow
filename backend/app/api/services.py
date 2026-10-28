@@ -2,7 +2,7 @@ from fastapi import APIRouter, Depends, HTTPException, status
 from sqlalchemy.orm import Session
 
 from app.core.database import get_db
-from app.core.deps import get_current_user, require_staff
+from app.core.deps import require_staff
 from app.models.models import Service, User
 from app.schemas.schemas import ServiceCreate, ServiceUpdate, ServiceOut
 

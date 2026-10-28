@@ -7,8 +7,8 @@ from app.core.database import get_db, SessionLocal
 from app.core.config import settings
 from app.core.rate_limit import rate_limit
 from app.core.deps import get_current_user, require_staff
-from app.models.models import Queue, Ticket, TicketStatus, User, Service
-from app.schemas.schemas import QueueCreate, QueueOut, TicketOut, TicketDetailOut
+from app.models.models import Queue, User, Service
+from app.schemas.schemas import QueueCreate, QueueOut, TicketDetailOut
 from app.services import queue_service
 from app.services.ws_manager import manager
 

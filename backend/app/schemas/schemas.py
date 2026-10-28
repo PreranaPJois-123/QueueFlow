@@ -1,7 +1,7 @@
 from datetime import datetime
 from typing import Optional
 
-from pydantic import BaseModel, EmailStr, Field, ConfigDict, field_validator
+from pydantic import BaseModel, EmailStr, Field, ConfigDict, field_validator, model_validator
 
 from app.models.models import UserRole, QueueStatus, TicketStatus, AppointmentStatus, NotificationType
 
@@ -20,28 +20,92 @@ class NamedInput(BaseModel):
 
 # ----------------------------- Auth -----------------------------
 
-class UserRegister(NamedInput):
-    email: EmailStr
-    password: str = Field(min_length=8, max_length=72)  # 72 bytes is bcrypt's hard limit
-    full_name: str = Field(min_length=1, max_length=255)
-    role: UserRole = UserRole.CUSTOMER
+COMMON_PASSWORDS = {
+    "password", "password1", "password123", "1234567890", "qwertyuiop", "letmein123", "welcome123",
+    "iloveyou12", "admin12345", "queueflow1", "qwerty1234", "abc1234567",
+}
 
-    @field_validator("password")
-    @classmethod
-    def password_bytes(cls, value):
-        if len(value.encode("utf-8")) > 72:
-            raise ValueError("Password must be at most 72 UTF-8 bytes")
-        return value
+
+def check_password_strength(password: str, email: str | None = None) -> str:
+    """Policy: 10-128 characters, at least one letter and one digit, not a
+    common password, and not derived from the email address."""
+    if not 10 <= len(password) <= 128:
+        raise ValueError("Password must be between 10 and 128 characters")
+    if not any(c.isalpha() for c in password) or not any(c.isdigit() for c in password):
+        raise ValueError("Password must contain at least one letter and one number")
+    if password.lower() in COMMON_PASSWORDS:
+        raise ValueError("This password is too common; choose another")
+    if email and email.split("@")[0].lower() in password.lower() and len(email.split("@")[0]) >= 4:
+        raise ValueError("Password must not contain your email name")
+    return password
+
+
+class AccountCreate(NamedInput):
+    """Trusted account creation (CLI/admin bootstrap)."""
+    email: EmailStr
+    password: str
+    full_name: str = Field(min_length=1, max_length=255)
+
+    @model_validator(mode="after")
+    def strong_password(self):
+        check_password_strength(self.password, self.email)
+        return self
+
+
+class UserRegister(NamedInput):
+    model_config = ConfigDict(extra="forbid")
+    email: EmailStr
+    password: str = Field(max_length=128)
+    confirm_password: str = Field(max_length=128)
+    full_name: str = Field(min_length=1, max_length=120)
+    # Accepted only so an escalation attempt can be rejected explicitly (403).
+    role: Optional[UserRole] = None
+
+    @model_validator(mode="after")
+    def passwords(self):
+        if self.password != self.confirm_password:
+            raise ValueError("Passwords do not match")
+        check_password_strength(self.password, self.email)
+        return self
 
 
 class UserLogin(BaseModel):
+    model_config = ConfigDict(extra="forbid")
     email: EmailStr
-    password: str
+    password: str = Field(max_length=128)
 
 
-class Token(BaseModel):
-    access_token: str
-    token_type: str = "bearer"
+class PasswordChange(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+    current_password: str = Field(max_length=128)
+    new_password: str = Field(max_length=128)
+    confirm_password: str = Field(max_length=128)
+
+    @model_validator(mode="after")
+    def passwords(self):
+        if self.new_password != self.confirm_password:
+            raise ValueError("Passwords do not match")
+        check_password_strength(self.new_password)
+        return self
+
+
+class PasswordResetRequest(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+    email: EmailStr
+
+
+class PasswordResetConfirm(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+    token: str = Field(min_length=20, max_length=128)
+    new_password: str = Field(max_length=128)
+    confirm_password: str = Field(max_length=128)
+
+    @model_validator(mode="after")
+    def passwords(self):
+        if self.new_password != self.confirm_password:
+            raise ValueError("Passwords do not match")
+        check_password_strength(self.new_password)
+        return self
 
 
 class UserOut(BaseModel):
@@ -51,7 +115,14 @@ class UserOut(BaseModel):
     full_name: str
     role: UserRole
     is_active: bool
+    pref_sound_enabled: bool = False
+    pref_browser_enabled: bool = False
     created_at: datetime
+
+
+class SessionOut(BaseModel):
+    user: UserOut
+    csrf_token: str
 
 
 # ----------------------------- Service -----------------------------
@@ -188,12 +259,17 @@ class ErrorResponse(BaseModel):
 
 
 class ProfileUpdate(BaseModel):
-    full_name: str = Field(min_length=1, max_length=255)
+    model_config = ConfigDict(extra="forbid")
+    full_name: Optional[str] = Field(default=None, min_length=1, max_length=120)
+    pref_sound_enabled: Optional[bool] = None
+    pref_browser_enabled: Optional[bool] = None
 
     @field_validator("full_name")
     @classmethod
     def clean_name(cls, value):
+        if value is None:
+            return value
         value = value.strip()
         if not value:
-            raise ValueError("Enter your name")
+            raise ValueError("Name cannot be blank")
         return value

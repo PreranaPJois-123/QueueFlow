@@ -1,14 +1,13 @@
 """Product read models: real aggregates with no private data in public snapshots."""
 from datetime import datetime, timezone, timedelta
 from fastapi import APIRouter, Depends, HTTPException
-from sqlalchemy import func
 from sqlalchemy.orm import Session, joinedload
 from app.core.database import get_db
 from app.core.deps import get_current_user, require_staff
-from app.models.models import User, UserRole, Queue, Ticket, TicketStatus, Appointment, AppointmentStatus, Notification, ServiceRecord
+from app.models.models import User, UserRole, Queue, Ticket, TicketStatus, Appointment, AppointmentStatus, Notification
 from app.schemas.schemas import QueueOut, TicketOut, AppointmentOut, UserOut, NotificationOut
 from app.services.queue_service import build_queue_state
-from app.services.prediction import predict_duration, predict_wait, utc
+from app.services.prediction import predict_wait, utc
 
 router = APIRouter(prefix="/api/product", tags=["product"])
 ACTIVE = [TicketStatus.WAITING, TicketStatus.CALLED, TicketStatus.SERVING]

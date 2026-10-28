@@ -14,7 +14,7 @@ export function Account() {
     e.preventDefault();
     setPending(true);
     try {
-      await updateProfile(name.trim());
+      await updateProfile({ full_name: name.trim() });
       push("Profile updated", "success");
     } catch (e) {
       push(extractErrorMessage(e), "error");

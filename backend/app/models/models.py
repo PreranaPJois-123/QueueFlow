@@ -3,8 +3,9 @@ import uuid
 
 from sqlalchemy import (
     Column, String, Boolean, DateTime, ForeignKey, Integer, Enum as SAEnum,
-    Text, func, Index, UniqueConstraint,
+    Text, func, Index,
 )
+from sqlalchemy.dialects.postgresql import JSONB
 from sqlalchemy.orm import relationship
 
 from app.core.database import Base
@@ -50,6 +51,10 @@ class NotificationType(str, enum.Enum):
     CALLED = "CALLED"
     QUEUE_UPDATE = "QUEUE_UPDATE"
     SYSTEM = "SYSTEM"
+    BOOKING_CONFIRMED = "BOOKING_CONFIRMED"
+    BOOKING_UPDATED = "BOOKING_UPDATED"
+    BOOKING_CANCELLED = "BOOKING_CANCELLED"
+    SERVICE_DELAY = "SERVICE_DELAY"
 
 
 # ----------------------------- Models -----------------------------
@@ -63,6 +68,9 @@ class User(Base):
     full_name = Column(String(255), nullable=False)
     role = Column(SAEnum(UserRole, name="user_role"), nullable=False, default=UserRole.CUSTOMER)
     is_active = Column(Boolean, nullable=False, default=True)
+    pref_sound_enabled = Column(Boolean, nullable=False, default=False, server_default="false")
+    pref_browser_enabled = Column(Boolean, nullable=False, default=False, server_default="false")
+    password_changed_at = Column(DateTime(timezone=True), nullable=True)
     created_at = Column(DateTime(timezone=True), server_default=func.now())
     updated_at = Column(DateTime(timezone=True), server_default=func.now(), onupdate=func.now())
 
@@ -170,7 +178,56 @@ class Notification(Base):
     id = Column(String(36), primary_key=True, default=gen_uuid)
     user_id = Column(String(36), ForeignKey("users.id"), nullable=False, index=True)
     ticket_id = Column(String(36), ForeignKey("tickets.id"), nullable=True)
+    booking_id = Column(String(36), ForeignKey("bookings.id", ondelete="SET NULL"), nullable=True, index=True)
+    reservation_id = Column(String(36), ForeignKey("reservations.id", ondelete="SET NULL"), nullable=True)
     type = Column(SAEnum(NotificationType, name="notification_type"), nullable=False)
     message = Column(String(500), nullable=False)
+    # Idempotency: one notification per logical event (e.g. "turn:<booking>:<slot>").
+    dedupe_key = Column(String(160), nullable=True, unique=True)
     is_read = Column(Boolean, nullable=False, default=False)
     created_at = Column(DateTime(timezone=True), server_default=func.now(), index=True)
+
+
+class UserSession(Base):
+    """Server-side browser session. The cookie holds a random token; only its
+    keyed digest is stored, so sessions can be revoked and expire server-side."""
+    __tablename__ = "user_sessions"
+
+    id = Column(String(36), primary_key=True, default=gen_uuid)
+    user_id = Column(String(36), ForeignKey("users.id", ondelete="CASCADE"), nullable=False, index=True)
+    token_hash = Column(String(64), nullable=False, unique=True)
+    created_at = Column(DateTime(timezone=True), nullable=False, server_default=func.now())
+    expires_at = Column(DateTime(timezone=True), nullable=False)
+    last_seen_at = Column(DateTime(timezone=True), nullable=False, server_default=func.now())
+    revoked_at = Column(DateTime(timezone=True), nullable=True)
+    user_agent = Column(String(255), nullable=True)
+    ip_address = Column(String(64), nullable=True)
+
+    user = relationship("User")
+
+
+class PasswordResetToken(Base):
+    __tablename__ = "password_reset_tokens"
+
+    id = Column(String(36), primary_key=True, default=gen_uuid)
+    user_id = Column(String(36), ForeignKey("users.id", ondelete="CASCADE"), nullable=False, index=True)
+    token_hash = Column(String(64), nullable=False, unique=True)
+    expires_at = Column(DateTime(timezone=True), nullable=False)
+    used_at = Column(DateTime(timezone=True), nullable=True)
+    created_at = Column(DateTime(timezone=True), nullable=False, server_default=func.now())
+
+
+class AuditEvent(Base):
+    """Append-only record of security-relevant actions and booking status transitions."""
+    __tablename__ = "audit_events"
+
+    id = Column(String(36), primary_key=True, default=gen_uuid)
+    actor_id = Column(String(36), ForeignKey("users.id", ondelete="SET NULL"), nullable=True, index=True)
+    action = Column(String(64), nullable=False)
+    entity_type = Column(String(32), nullable=True)
+    entity_id = Column(String(36), nullable=True)
+    detail = Column(JSONB, nullable=False, default=dict)
+    ip_address = Column(String(64), nullable=True)
+    created_at = Column(DateTime(timezone=True), nullable=False, server_default=func.now(), index=True)
+
+    __table_args__ = (Index("ix_audit_entity", "entity_type", "entity_id"),)

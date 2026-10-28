@@ -55,7 +55,9 @@ def test_appointment_conflicts_and_availability(client):
 def test_profile_validation_and_ownership(client):
     staff, customer, service, queue = setup(client)
     assert client.patch('/api/auth/me', headers=customer, json={'full_name':'  '}).status_code == 422
-    result = client.patch('/api/auth/me', headers=customer, json={'full_name':' Updated Name ', 'role':'ADMIN'})
+    # Mass assignment: unknown/privileged fields are rejected outright.
+    assert client.patch('/api/auth/me', headers=customer, json={'full_name':'X', 'role':'ADMIN'}).status_code == 422
+    result = client.patch('/api/auth/me', headers=customer, json={'full_name':' Updated Name '})
     assert result.status_code == 200
     assert result.json()['full_name'] == 'Updated Name'
     assert result.json()['role'] == 'CUSTOMER'

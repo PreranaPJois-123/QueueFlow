@@ -1,0 +1,12 @@
+line-length = 120
+target-version = "py312"
+extend-exclude = ["alembic/versions"]
+
+[lint]
+select = ["E", "F", "W", "B", "S"]
+# S110: deliberate fail-safe `except: pass` around optional infrastructure (Redis).
+# S608: SQL is built only from fixed identifiers (test truncation), never user input.
+ignore = ["E501", "B008", "B904", "B905", "S101", "S105", "S106", "S110", "S311", "S608"]
+
+[lint.per-file-ignores]
+"app/tests/*" = ["E702", "S"]

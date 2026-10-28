@@ -1,5 +1,5 @@
 import { useEffect, useState } from "react";
-import { WS_BASE } from "./api";
+import { wsUrl } from "./api";
 import type { QueueState } from "../types";
 
 export function useQueueSocket(queueId: string | null) {
@@ -26,7 +26,7 @@ export function useQueueSocket(queueId: string | null) {
     function connect() {
       if (!active) return;
       status(navigator.onLine ? "RECONNECTING" : "OFFLINE");
-      socket = new WebSocket(`${WS_BASE}/api/queues/${id}/ws`);
+      socket = new WebSocket(wsUrl(`/api/queues/${id}/ws`));
       socket.onopen = () => {
         lastFrame = Date.now();
         socket?.send("ping");

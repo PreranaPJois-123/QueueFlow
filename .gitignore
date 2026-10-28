@@ -62,9 +62,13 @@ Thumbs.db
 *.tsbuildinfo
 *.pem
 *.key
-<<<<<<< HEAD
 
 # Local database dumps
 backups/
-=======
->>>>>>> 53aa3faa382e169f79fb911f954a11c4a42a30dc
+
+.env
+node_modules/
+dist/
+frontend-old/
+*.rdb
+backups/

@@ -1,59 +1,71 @@
-# QueueFlow verification — 2026-09-30
+# Verification record (2026-10-28)
 
-Source baseline: GitHub main and uploaded ZIP at
-`360ba2573deb74ecd05767a7baa42830e48d0e04`.
+Environment: Linux container with PostgreSQL 16.x + pgvector + btree_gist, Redis 7,
+Python 3.12, Node 22, nginx 1.24 using the repository's `frontend/nginx.conf`
+(only the upstream address and root path substituted), Chromium via Playwright.
+Docker Hub was blocked from that environment, so **container images were not built
+or run**; services ran natively with the same configuration.
 
-## Executed locally
+## Results
 
-- Backend regression suite: 73 passed, one PostgreSQL-only concurrency test skipped
-  under SQLite; two upstream TestClient deprecation warnings.
-- Regression coverage includes customer/staff authorization, JWT validation, FIFO
-  transitions, duplicate joins, ownership, pause/resume/close, appointment future
-  times and overlaps, available slots, profile updates, notifications, analytics,
-  calculated/learned predictions, WebSocket snapshots, heartbeat and reconnects.
-- Frontend lint: passed with no warnings/errors.
-- TypeScript and Vite production build: passed, with the actual configurable
-  Render backend HTTPS origin.
-- Python dependency consistency (`pip check`): passed.
-- PostgreSQL migration SQL generation: passed. Models and database schema are
-  unchanged by this update, so no new migration is required.
+| Check | Result |
+|-------|--------|
+| Backend tests (`pytest`, real PostgreSQL) | **137 passed**, 0 failed |
+| Backend lint (`ruff check app`, incl. bandit `S` rules) | clean |
+| Python dependency audit (`pip-audit`) | 0 known vulnerabilities (after upgrading certifi, dnspython) |
+| Alembic | upgrade → `alembic check` (no drift) → downgrade → re-upgrade, all succeeded; upgrade also succeeded as the non-superuser `queueflow_app` on a 1.x-style database after `upgrade-existing-volume.sql` |
+| Frontend `tsc -b`, `oxlint` | clean (0 errors) |
+| Frontend tests (Vitest + Testing Library) | **16 passed** |
+| npm audit | 0 vulnerabilities |
+| Production build | succeeded |
+| Browser E2E (`e2e/run.mjs`, 1280 px + 375 px) | **16/16 steps passed** |
+| API smoke test (`scripts/smoke_test.py`) via nginx | all checks passed |
+| Seed and ingestion idempotence | second run: 0 created / 24 unchanged |
+| Retrieval evaluation (12 questions, offline embedder, k=5) | hit@1 0.75, hit@5 1.00, MRR 0.836 |
+| Multi-instance realtime | booking made through backend instance A delivered a notification to a WebSocket held by instance B (via Redis pub/sub) |
+| `docker compose config` | valid |
+| nginx | CSP present, no CSP violations in the SPA or `/docs`, 2 MB body → 413, WebSocket upgrade works |
 
-## GitHub CI and live checks
+## What the tests cover
 
-Commit `be51b613dbc6512e21a9df5557dffabaeb823055` passed GitHub Actions run
-[36712198589](https://github.com/PreranaPJois-123/QueueFlow/actions/runs/36712198589):
-73 tests passed against PostgreSQL, including the concurrent booking and duplicate
-join test; migration upgrade/check/downgrade/re-upgrade and both Docker builds
-passed. A follow-up adds a future-appointment no-show guard and page metadata;
-its workflow result is checked separately after publication.
+- **Auth:** registration validation and policy, duplicate emails, Argon2id, bcrypt
+  upgrade, generic login errors, CSRF, foreign Origin, logout revocation, session
+  rotation, expiry and idle timeout, password change and reset (single use, no
+  enumeration), brute-force lockout, route rate limits, audit events, headers, body limit.
+- **Bookings:** search/filters, doctors shown only where configured, end-to-end hospital
+  booking, sequential per-doctor tokens, "any available", invalid requests (wrong doctor,
+  other venue's service, off-grid time, naive time, past, beyond horizon), double booking,
+  customer overlap, idempotency, object-level access, cancellation freeing slots without
+  reusing tokens, cut-off policy, rescheduling token rules, shop staff authorisation,
+  service durations, **6 concurrent customers on one slot (exactly 1 wins)**,
+  **5 concurrent bookings get unique tokens**, exclusion constraint enforced by PostgreSQL.
+- **Hotels:** server pricing and taxes, occupancy filtering, client price ignored, invalid
+  stays, last-room inventory, **6 concurrent attempts on the last room (exactly 1 wins)**,
+  idempotency, free vs late cancellation fees and inventory release, atomic modification,
+  isolation.
+- **Operations:** venue-scoped staff access, start-next, one visit in progress, live
+  estimates, delay notifications de-duplicated, exactly one 20-minute turn alert across
+  repeated recomputation, invalid transitions, paused queues, customers cannot drive staff
+  actions or see other customers, authenticated private WebSockets, notification read
+  ownership, admin role management and self-demotion guard, provider configuration.
+- **Wayzen:** relevant retrieval, below-threshold rejection, staff/private document access
+  control, index updates/versioning/removal, context escaping, limited mode, emergency
+  notice, private history, booking only after explicit confirmation (and single use,
+  owner only), expiry and dismissal, tool authorisation (another user's reference,
+  unknown tool, invalid arguments), prompt injection from a poisoned document, hotel
+  reservation with server price, provider failure fallback, chat rate limit.
+- **E2E (browser):** register (with validation errors), HttpOnly cookie and empty
+  localStorage, find a hospital by specialization, book a cardiology slot and get a token,
+  dashboard and list, live notification, shop booking, hotel reservation with server price,
+  free cancellation, reschedule and cancel, another user denied, Wayzen with sources,
+  admin/staff board, mobile without horizontal scroll, no uncaught page errors.
 
-The live backend returned HTTP 200 with database and Redis both up. The new
-`/api/product/queues` endpoint returned HTTP 200 after deployment. The live
-frontend served the matching built asset; browser inspection verified the landing
-page and a logged-out dashboard redirect to login. No application console errors
-were observed on those pages (browser-extension messages are unrelated).
+## Not verified (requires external services or infrastructure)
 
-## External verification gates
-
-The existing GitHub Actions workflow runs PostgreSQL/Redis-backed tests, migration
-upgrade/check/downgrade/re-upgrade and both Docker builds after publication. The
-new concurrency test specifically verifies concurrent appointment reservations
-and duplicate queue joins under PostgreSQL row locks. Local SQLite cannot prove
-these locks, and Docker is unavailable in the local runtime.
-
-The browser cannot open the local preview URL in this environment. Authenticated
-browser workflows have not been claimed as verified. The Render dashboard in the
-current browser requires sign-in; deployment and current live health are reported
-separately after publication rather than inferred from this document.
-
-## Operational limits
-
-- A new database has no fabricated services, customers or history. Staff must
-  publish real services and open queues before customers can use them.
-- Appointment reservations are 30 minutes with continuous hours; business-hour
-  calendars and staff-specific capacities are not configured in the schema.
-- Prediction uses real history and is explicitly labelled. No accuracy claim is
-  made without a proper held-out evaluation dataset.
-- WebSocket fan-out remains one backend process; horizontal scaling needs Redis
-  pub/sub. Render free-plan cold starts can delay the first response.
-- Logout clears the browser JWT; server-side token revocation is not implemented.
+- **Real LLM generation.** Tool calling and grounding were tested with a scripted test
+  model. No Anthropic/OpenAI/Ollama call was made; adapter request formats follow the
+  providers' public APIs but are unexercised. The `openai_compatible` embedding default
+  threshold (0.30) is a starting point to tune with `python -m app.rag.evaluate`.
+- **Email delivery** (SMTP) and **browser notification/sound** behaviour on real devices.
+- **Docker images, Compose runtime, GitHub Actions workflow and AWS EC2 deployment.**
+- **Render** deployment of 2.0.

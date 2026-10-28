@@ -1,4 +1,3 @@
-import time
 from app.tests.conftest import register_and_login
 
 

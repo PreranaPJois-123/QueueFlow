@@ -9,8 +9,10 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
     curl \
     && rm -rf /var/lib/apt/lists/*
 
+ENV PYTHONDONTWRITEBYTECODE=1 PYTHONUNBUFFERED=1
+
 COPY requirements.txt .
-RUN pip install --no-cache-dir -r requirements.txt
+RUN python -m pip install --no-cache-dir --index-url https://pypi.org/simple -r requirements.txt
 
 COPY . .
 
@@ -20,9 +22,9 @@ USER appuser
 
 EXPOSE 8000
 
-HEALTHCHECK --interval=30s --timeout=5s --start-period=10s --retries=3 \
-    CMD curl -f http://localhost:${PORT:-8000}/api/health || exit 1
+HEALTHCHECK --interval=30s --timeout=5s --start-period=5s --retries=3 \
+        CMD curl -fsS http://127.0.0.1:${PORT:-8000}/api/health >/dev/null || exit 1
 
-# Run migrations then start the server. Alembic is idempotent — safe to
-# run on every container start (it no-ops when already at head).
-CMD ["sh", "-c", "alembic upgrade head && QUEUEFLOW_BOOTSTRAP_ADMIN=1 python -m app.provision_user && exec uvicorn app.main:app --host 0.0.0.0 --port ${PORT:-8000} --workers 1"]
+# Migrations, admin bootstrap, optional seed and knowledge ingestion are all
+# idempotent, so they are safe on every start. See docker-entrypoint.sh.
+CMD ["./docker-entrypoint.sh"]

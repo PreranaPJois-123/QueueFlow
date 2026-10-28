@@ -6,7 +6,7 @@ from getpass import getpass
 from app.core.database import SessionLocal
 from app.core.security import hash_password
 from app.models.models import User, UserRole
-from app.schemas.schemas import UserRegister
+from app.schemas.schemas import AccountCreate
 
 
 def bootstrap_admin_from_env():
@@ -21,7 +21,7 @@ def bootstrap_admin_from_env():
         return
     if not all(values):
         raise ValueError("Set all INITIAL_ADMIN_EMAIL, INITIAL_ADMIN_NAME and INITIAL_ADMIN_PASSWORD")
-    payload = UserRegister(email=values[0], full_name=values[1], password=values[2])
+    payload = AccountCreate(email=values[0], full_name=values[1], password=values[2])
     with SessionLocal() as db:
         if db.query(User).filter(User.role == UserRole.ADMIN).first():
             return
@@ -42,7 +42,7 @@ def main():
     password = getpass("New account password: ")
     if password != getpass("Repeat password: "):
         parser.error("Passwords do not match")
-    payload = UserRegister(email=args.email, full_name=args.name, password=password)
+    payload = AccountCreate(email=args.email, full_name=args.name, password=password)
     with SessionLocal() as db:
         if db.query(User).filter(User.email == payload.email.lower()).first():
             parser.error("Account already exists; no changes made")
